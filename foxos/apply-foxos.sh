@@ -97,7 +97,7 @@ if command -v plymouth-set-default-theme >/dev/null; then
   if [ -f /etc/default/grub ]; then
     bk /etc/default/grub
     if ! grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=.*splash' /etc/default/grub; then
-      sudo sed -i -E 's/^(GRUB_CMDLINE_LINUX_DEFAULT=")([^"]*)"/\1\2 quiet splash"/; s/" +/"/; s/  +/ /g' /etc/default/grub
+      sudo sed -i -E '/^GRUB_CMDLINE_LINUX_DEFAULT=/{s/\bquiet\b//g; s/^(GRUB_CMDLINE_LINUX_DEFAULT=")([^"]*)"/\1\2 quiet splash"/; s/=" +/="/; s/  +/ /g}' /etc/default/grub
     fi
     grep -q '^GRUB_CMDLINE_LINUX_DEFAULT=' /etc/default/grub || echo 'GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"' | sudo tee -a /etc/default/grub >/dev/null
     sudo update-grub >/dev/null 2>&1 || true
