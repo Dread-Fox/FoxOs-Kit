@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=FoxOS
+Description=FoxOS boot splash by Fox Wrox
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/foxos
+ScriptFile=/usr/share/plymouth/themes/foxos/foxos.script

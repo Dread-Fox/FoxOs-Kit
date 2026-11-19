@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0%" stop-color="#15080b"/>
+      <stop offset="45%" stop-color="#0b0407"/>
+      <stop offset="100%" stop-color="#040203"/>
+    </radialGradient>
+    <linearGradient id="crim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff1f44"/>
+      <stop offset="55%" stop-color="#e11d2a"/>
+      <stop offset="100%" stop-color="#8b0b16"/>
+    </linearGradient>
+    <linearGradient id="crimDark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#b3121f"/>
+      <stop offset="100%" stop-color="#5e0810"/>
+    </linearGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="softglow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="42"/>
+    </filter>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+
+  <!-- faint tech grid -->
+  <g stroke="#e11d2a" stroke-width="1" opacity="0.045">
+    <g>
+      <line x1="0" y1="135" x2="1920" y2="135"/><line x1="0" y1="270" x2="1920" y2="270"/>
+      <line x1="0" y1="405" x2="1920" y2="405"/><line x1="0" y1="540" x2="1920" y2="540"/>
+      <line x1="0" y1="675" x2="1920" y2="675"/><line x1="0" y1="810" x2="1920" y2="810"/>
+      <line x1="0" y1="945" x2="1920" y2="945"/>
+    </g>
+    <g>
+      <line x1="160" y1="0" x2="160" y2="1080"/><line x1="320" y1="0" x2="320" y2="1080"/>
+      <line x1="480" y1="0" x2="480" y2="1080"/><line x1="640" y1="0" x2="640" y2="1080"/>
+      <line x1="800" y1="0" x2="800" y2="1080"/><line x1="960" y1="0" x2="960" y2="1080"/>
+      <line x1="1120" y1="0" x2="1120" y2="1080"/><line x1="1280" y1="0" x2="1280" y2="1080"/>
+      <line x1="1440" y1="0" x2="1440" y2="1080"/><line x1="1600" y1="0" x2="1600" y2="1080"/>
+      <line x1="1760" y1="0" x2="1760" y2="1080"/>
+    </g>
+  </g>
+
+  <!-- ambient glow behind fox -->
+  <circle cx="960" cy="430" r="230" fill="#e11d2a" opacity="0.22" filter="url(#softglow)"/>
+
+  <!-- low-poly geometric fox head, centered ~960,430 -->
+  <g filter="url(#glow)">
+    <!-- ears -->
+    <polygon points="792,250 858,196 872,330" fill="url(#crimDark)"/>
+    <polygon points="1128,250 1062,196 1048,330" fill="url(#crimDark)"/>
+    <polygon points="820,260 858,214 866,322" fill="#2a0409"/>
+    <polygon points="1100,260 1062,214 1054,322" fill="#2a0409"/>
+    <!-- upper face left/right -->
+    <polygon points="872,300 960,276 960,470 836,430" fill="url(#crim)"/>
+    <polygon points="1048,300 960,276 960,470 1084,430" fill="url(#crimDark)"/>
+    <!-- cheeks -->
+    <polygon points="836,430 960,470 905,560 812,486" fill="url(#crimDark)"/>
+    <polygon points="1084,430 960,470 1015,560 1108,486" fill="url(#crim)"/>
+    <!-- muzzle -->
+    <polygon points="905,560 960,470 1015,560 960,636" fill="url(#crim)"/>
+    <polygon points="905,560 960,636 870,600" fill="url(#crimDark)"/>
+    <polygon points="1015,560 960,636 1050,600" fill="url(#crimDark)"/>
+    <!-- white-ish muzzle tip (kept crimson-tinted to match palette) -->
+    <polygon points="938,590 982,590 960,636" fill="#ff3355"/>
+    <!-- eyes (dark negative space, with crimson spark) -->
+    <polygon points="892,392 940,372 928,418 892,420" fill="#0b0407"/>
+    <polygon points="1028,392 980,372 992,418 1028,420" fill="#0b0407"/>
+    <polygon points="905,398 925,390 918,410" fill="#ff1f44"/>
+    <polygon points="1015,398 995,390 1002,410" fill="#ff1f44"/>
+  </g>
+
+  <!-- wordmark -->
+  <g font-family="DejaVu Sans, Verdana, sans-serif" text-anchor="middle">
+    <text x="960" y="820" font-size="150" font-weight="bold" letter-spacing="6" fill="#f5f5f7">Fox<tspan fill="#e11d2a">OS</tspan></text>
+    <text x="960" y="880" font-size="34" letter-spacing="14" fill="#9a2a33">D R E A D F O X   ·   B U I L T   O N   K A L I</text>
+  </g>
+
+  <!-- corner accents -->
+  <g stroke="#e11d2a" stroke-width="3" fill="none" opacity="0.7">
+    <path d="M60 60 h120 M60 60 v120"/>
+    <path d="M1860 60 h-120 M1860 60 v120"/>
+    <path d="M60 1020 h120 M60 1020 v-120"/>
+    <path d="M1860 1020 h-120 M1860 1020 v-120"/>
+  </g>
+</svg>

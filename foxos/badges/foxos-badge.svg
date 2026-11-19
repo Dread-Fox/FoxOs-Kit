@@ -1,0 +1,22 @@
+<svg viewBox="0 0 400 400" width="600" height="600" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Fox OS hex badge">
+<defs>
+<linearGradient id="hxB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#F0F3F5"></stop><stop offset="0.45" stop-color="#9AA3AC"></stop><stop offset="0.55" stop-color="#5A626B"></stop><stop offset="1" stop-color="#C9CFD5"></stop></linearGradient>
+<filter id="glB" x="-80%" y="-200%" width="260%" height="500%"><feGaussianBlur stdDeviation="4" result="b"></feGaussianBlur><feMerge><feMergeNode in="b"></feMergeNode><feMergeNode in="SourceGraphic"></feMergeNode></feMerge></filter>
+</defs>
+<path d="M200 14L361 107L361 293L200 386L39 293L39 107Z" fill="url(#hxB)"></path>
+<path d="M200 32L345 116L345 284L200 368L55 284L55 116Z" fill="#E11D2A"></path>
+<path d="M200 42L336 121L336 279L200 358L64 279L64 121Z" fill="#0C0E11"></path>
+<path d="M126 100L172 152L112 192Z" fill="#D9DEE3"></path>
+<path d="M274 100L228 152L288 192Z" fill="#7C858E"></path>
+<path d="M134 116L164 150L124 176Z M266 116L236 150L276 176Z" fill="#E11D2A"></path>
+<path d="M172 152L228 152L200 214Z" fill="#EEF1F4"></path>
+<path d="M112 192L172 152L200 214L152 252Z" fill="#AEB6BE"></path>
+<path d="M288 192L228 152L200 214L248 252Z" fill="#545C65"></path>
+<path d="M112 192L88 214L132 226Z" fill="#8F98A1"></path>
+<path d="M288 192L312 214L268 226Z" fill="#3E454D"></path>
+<path d="M152 252L200 214L200 322Z" fill="#C3C9CF"></path>
+<path d="M248 252L200 214L200 322Z" fill="#3E454D"></path>
+<path d="M150 198L186 210L172 218Z M250 198L214 210L228 218Z" fill="#0C0E11"></path>
+<path d="M154 200L182 209L172 214Z M246 200L218 209L228 214Z" fill="#FF2E4D" filter="url(#glB)"></path>
+<path d="M190 306L210 306L200 322Z" fill="#0C0E11"></path>
+</svg>

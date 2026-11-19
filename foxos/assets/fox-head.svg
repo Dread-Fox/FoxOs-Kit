@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="720" viewBox="0 0 720 720">
+  <!-- ears -->
+  <polygon points="250,150 330,90 345,250" fill="#8b0b16"/>
+  <polygon points="470,150 390,90 375,250" fill="#e11d2a"/>
+  <polygon points="275,170 330,120 340,235" fill="#2a0409"/>
+  <polygon points="445,170 390,120 380,235" fill="#2a0409"/>
+  <!-- forehead split -->
+  <polygon points="345,215 360,150 375,215 360,360" fill="#ff2a48"/>
+  <!-- left face -->
+  <polygon points="345,215 360,360 230,300 300,210" fill="#b3121f"/>
+  <polygon points="230,300 360,360 300,470 235,380" fill="#6e0912"/>
+  <!-- right face -->
+  <polygon points="375,215 360,360 490,300 420,210" fill="#e11d2a"/>
+  <polygon points="490,300 360,360 420,470 485,380" fill="#8b0b16"/>
+  <!-- muzzle -->
+  <polygon points="300,470 360,360 420,470 360,560" fill="#c4121f"/>
+  <polygon points="300,470 360,560 360,470" fill="#7a0a12"/>
+  <!-- nose -->
+  <polygon points="338,500 382,500 360,548" fill="#ff3b5c"/>
+  <!-- eyes -->
+  <polygon points="290,330 345,315 330,360 292,358" fill="#0b0407"/>
+  <polygon points="430,330 375,315 390,360 428,358" fill="#0b0407"/>
+  <polygon points="300,335 326,326 318,352" fill="#ff2a48"/>
+  <polygon points="420,335 394,326 402,352" fill="#ff2a48"/>
+</svg>

@@ -1,0 +1,13 @@
+# never commit secrets or per-machine state
+*.db
+*.db-wal
+*.db-shm
+__pycache__/
+creds
+settings.env*
+.credentials.json
+recon/
+hunts/
+reports/
+loot/
+profiles/

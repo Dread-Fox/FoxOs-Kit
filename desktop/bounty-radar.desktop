@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Bounty Radar
+GenericName=HackerOne target lineup
+Comment=DreadFox live HackerOne bounty ranking widget
+Exec=/usr/bin/python3 -I @HOME@/h1/h1_widget.py
+Icon=@HOME@/foxos/assets/badge.png
+Terminal=false
+Categories=Network;Security;
+StartupWMClass=Tk

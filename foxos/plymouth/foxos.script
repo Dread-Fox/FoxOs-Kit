@@ -1,0 +1,62 @@
+# FoxOS Plymouth splash
+Window.SetBackgroundTopColor(0.02, 0.02, 0.03);
+Window.SetBackgroundBottomColor(0.02, 0.01, 0.02);
+
+W = Window.GetWidth();
+H = Window.GetHeight();
+cx = W / 2;
+cy = H / 2;
+
+badge.image = Image("badge.png");
+badge.sprite = Sprite(badge.image);
+badge.sprite.SetX(cx - badge.image.GetWidth() / 2);
+badge.sprite.SetY(cy - badge.image.GetHeight() / 2 - 120);
+badge.sprite.SetZ(10);
+
+word.image = Image("wordmark.png");
+word.sprite = Sprite(word.image);
+word.sprite.SetX(cx - word.image.GetWidth() / 2);
+word.sprite.SetY(cy + 100);
+word.sprite.SetZ(10);
+
+track.image = Image("bartrack.png");
+track.sprite = Sprite(track.image);
+track.w = track.image.GetWidth();
+track.x = cx - track.w / 2;
+track.y = cy + 70;
+track.sprite.SetX(track.x);
+track.sprite.SetY(track.y);
+track.sprite.SetZ(5);
+
+fill.base = Image("barfill.png");
+fill.sprite = Sprite();
+fill.sprite.SetX(track.x);
+fill.sprite.SetY(track.y);
+fill.sprite.SetZ(6);
+
+progress = 0;
+
+fun refresh () {
+  # gentle badge pulse
+  o = 0.80 + 0.20 * Math.Sin(Plymouth.GetTime() * 2);
+  badge.sprite.SetOpacity(o);
+}
+Plymouth.SetRefreshFunction(refresh);
+
+fun on_boot_progress (duration, pct) {
+  progress = pct;
+  w = track.w * pct;
+  if (w < 1) w = 1;
+  scaled = fill.base.Scale(w, fill.base.GetHeight());
+  fill.sprite.SetImage(scaled);
+}
+Plymouth.SetBootProgressFunction(on_boot_progress);
+
+# password prompt (for encrypted disk / lock)
+fun on_message (text) { }
+Plymouth.SetMessageFunction(on_message);
+
+fun display_password (prompt, bullets) {
+  progress = progress;
+}
+Plymouth.SetDisplayPasswordFunction(display_password);

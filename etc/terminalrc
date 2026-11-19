@@ -1,0 +1,15 @@
+[Configuration]
+FontName=FiraCode 11
+MiscAlwaysShowTabs=FALSE
+MiscBell=FALSE
+MiscCursorBlinks=TRUE
+MiscCursorShape=TERMINAL_CURSOR_SHAPE_BLOCK
+MiscDefaultGeometry=100x28
+MiscShowUnsafePasteDialog=TRUE
+ScrollingBar=TERMINAL_SCROLLBAR_NONE
+ColorForeground=#c6ccd2
+ColorBackground=#0b0d10
+ColorCursor=#e11d2a
+ColorBold=#eef1f4
+ColorPalette=#15181c;#e11d2a;#3fb36b;#d6a800;#4a7fd6;#c0397a;#3fa7a7;#c6ccd2;#3a424a;#ff3b55;#57d487;#ffc948;#6b9bff;#ff5a9e;#5fd0d0;#eef1f4
+TabActivityColor=#e11d2a

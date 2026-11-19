@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="720" viewBox="0 0 760 720">
+  <!-- ============ FUR TUFTS (steel, crimson edge-light) ============ -->
+  <g>
+    <polygon points="250,250 120,300 262,352" fill="#2a3036"/>
+    <polygon points="262,352 96,392 268,440" fill="#333a41"/>
+    <polygon points="268,440 128,520 300,512" fill="#262b30"/>
+    <polygon points="250,250 128,302 150,312" fill="#8b0b16"/>
+    <polygon points="262,352 104,396 128,404" fill="#a01420"/>
+    <polygon points="268,440 136,514 160,512" fill="#7a0a12"/>
+
+    <polygon points="510,250 640,300 498,352" fill="#363d44"/>
+    <polygon points="498,352 664,392 492,440" fill="#3f474f"/>
+    <polygon points="492,440 632,520 460,512" fill="#2f363c"/>
+    <polygon points="510,250 632,302 610,312" fill="#a01420"/>
+    <polygon points="498,352 656,396 632,404" fill="#c4121f"/>
+    <polygon points="492,440 624,514 600,512" fill="#8b0b16"/>
+  </g>
+
+  <!-- ============ EARS (large, wide-set) ============ -->
+  <polygon points="196,80 262,286 338,214" fill="#2f363c"/>
+  <polygon points="196,80 262,286 238,210" fill="#22272c"/>
+  <polygon points="226,128 262,250 316,212" fill="#5e0810"/>
+  <polygon points="241,150 262,232 300,210" fill="#c4121f"/>
+
+  <polygon points="564,80 498,286 422,214" fill="#3f474f"/>
+  <polygon points="564,80 498,286 522,210" fill="#2f363c"/>
+  <polygon points="534,128 498,250 444,212" fill="#7a0a12"/>
+  <polygon points="519,150 498,232 460,210" fill="#e11d2a"/>
+
+  <!-- ============ FOREHEAD / BROW ============ -->
+  <polygon points="338,214 380,150 422,214 404,300 356,300" fill="#4a535c"/>
+  <polygon points="338,214 356,300 280,276 300,230" fill="#3a424a"/>
+  <polygon points="422,214 404,300 480,276 460,230" fill="#424b54"/>
+  <polygon points="280,276 356,300 340,372 258,352" fill="#2f363c"/>
+  <polygon points="480,276 404,300 420,372 502,352" fill="#363d44"/>
+
+  <!-- subtle crimson seam (thin) -->
+  <polygon points="377,205 383,205 381,360 379,360" fill="#e11d2a" opacity="0.85"/>
+  <circle cx="380" cy="205" r="6" fill="#ff5a73"/>
+
+  <!-- cheek facets -->
+  <polygon points="258,352 340,372 300,452 268,440" fill="#262b30"/>
+  <polygon points="502,352 420,372 460,452 492,440" fill="#333a41"/>
+  <polygon points="300,452 362,430 350,500 300,512" fill="#1f2429"/>
+  <polygon points="460,452 398,430 410,500 460,512" fill="#2a3036"/>
+  <!-- circuit branches low on cheeks -->
+  <g stroke="#e11d2a" stroke-width="2.5" fill="none" opacity="0.7">
+    <path d="M300,470 h-30 v22"/><path d="M460,470 h30 v22"/>
+  </g>
+
+  <!-- ============ MUZZLE / SNOUT ============ -->
+  <polygon points="340,372 420,372 398,430 362,430" fill="#424b54"/>
+  <polygon points="362,430 398,430 410,500 350,500" fill="#3a424a"/>
+  <polygon points="350,500 410,500 380,560" fill="#4a535c"/>
+  <polygon points="362,430 380,560 350,500" fill="#2f363c"/>
+  <polygon points="398,430 380,560 410,500" fill="#3f474f"/>
+  <polygon points="374,392 386,392 383,500 377,500" fill="#6b747d"/>
+
+  <!-- ============ EYES (drawn on top, big, glowing) ============ -->
+  <polygon points="276,348 352,364 336,406 286,398" fill="#0b0407"/>
+  <polygon points="484,348 408,364 424,406 474,398" fill="#0b0407"/>
+  <polygon points="290,358 346,372 330,398 296,390" fill="#e11d2a"/>
+  <polygon points="470,358 414,372 430,398 464,390" fill="#ff2a48"/>
+  <polygon points="300,366 334,376 322,392 306,386" fill="#ff6a7f"/>
+  <polygon points="460,366 426,376 438,392 454,386" fill="#ff6a7f"/>
+  <polygon points="312,372 326,378 320,386" fill="#ffd0d8"/>
+  <polygon points="448,372 434,378 440,386" fill="#ffd0d8"/>
+
+  <!-- ============ NOSE (on top) ============ -->
+  <polygon points="356,520 404,520 380,566" fill="#ff5a73"/>
+  <polygon points="356,520 404,520 380,540" fill="#e11d2a"/>
+</svg>
