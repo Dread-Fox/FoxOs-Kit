@@ -11,6 +11,14 @@
 - **Upgrade behaviour:** `scripts/install.sh` now runs `configure --upgrade`, which preserves existing `local`, `proxy` and `cloudflare` settings exactly (v3.3.3 migrated them to token-free mode). An unacknowledged v3.3.x `open` configuration is moved to `local` with a backup at `settings.env.before-v3.4.0` and a newly printed setup token. `scripts/local-service.sh` never selects open mode.
 - New `configure` flags: `--upgrade`, `--insecure-open-mode`, `--require-login`. `--rotate-token` now revokes all sessions. `--show-token` only works for legacy plaintext tokens.
 
+### Security: Rabbit Hole guardrails (important)
+
+- New `foxworx/rabbit_guard.py` checks every model-constructed command in installed-CLI mode. It is enforced in the job layer at delegation, approval and launch, so a blocked command never runs.
+- Scope enforcement on arguments: every IP, CIDR, `host:port`, `user@host`, URL and domain-like argument must be inside the engagement's include rules and outside its exclusions. CIDRs must be fully contained. IP range syntax and the workbench's own listener are always blocked.
+- Deny lists for interpreters/launchers, destructive, privilege, system-configuration, package-manager and remote-shell executables; per-tool options that read target files, execute code or write files (for example `nmap -iL/-iR`, `sqlmap --os-shell/--eval`, `curl -K/-T`); `file://` URLs and credential/config/state paths.
+- Every autonomous command is audited (`rabbit-auto-job`, with run, step and redacted command line) and logged; blocked attempts are audited as `rabbit-command-blocked` with the reason. Human-reviewed proposals show the same findings as `Guardrail:` warnings.
+- Documented why full sandboxing is out of scope for this release and what would be required (docs/RABBIT-HOLE.md).
+
 ## v3.3.3 — Token-free workbench and tunnel-independent operation
 
 - Removed mandatory FOXWORX setup-token login from the default installation. Fresh installs open directly on `http://127.0.0.1:8765`; the UI suppresses the login/logout workflow.

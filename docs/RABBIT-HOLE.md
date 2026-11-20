@@ -42,9 +42,35 @@ The agent receives exit status and bounded, redacted output to diagnose failures
 
 Runs stop when finished, blocked, out of budget, repeatedly invalid, canceled, or affected by policy/scope revocation. Executable identity and run authorization are checked again immediately before process creation. No run resumes automatically after service restart; interrupted work requires a new run authorization. Model-reported success requires at least one successful job, but still needs evidence review to establish that the objective was met.
 
+## Installed-CLI guardrails (v3.4.0)
+
+Every model-constructed command is checked by `foxworx/rabbit_guard.py` before it can run. The check is enforced in the job layer at three points: when the command is delegated to the run, when it is approved, and again immediately before the process is created. A blocked command never becomes a job. The model is told why so it can choose an in-scope alternative, and the attempt counts toward the retry limit.
+
+| Rule | Examples blocked |
+|---|---|
+| **Scope of every destination in the arguments.** Each IP address, CIDR block, `host:port`, `user@host`, URL and domain-like argument must match the engagement's include rules and no exclude rule. A CIDR must sit entirely inside an included network and overlap no exclusion. | `nmap 8.8.8.8`, `curl https://evil.test`, `dig @1.1.1.1 …` (out-of-scope resolver), `curl --proxy http://203.0.113.5:8080 …`, `nmap 10.0.0.0/16` when only a /24 is in scope |
+| **IP range syntax** (cannot be checked reliably) | `nmap 10.0.0.1-50`, `10.0.0.*` |
+| **The workbench itself** | `curl http://127.0.0.1:8765/api/…`, `localhost:8765`, even if 127.0.0.1 is in scope |
+| **Executable deny list**: shells and interpreters, command launchers (`env`, `xargs`, `find`, `timeout`, `awk`, `sed` …), destructive file/disk tools, privilege and system-configuration tools, package managers, remote shells and listeners (`ssh`, `nc`, `socat`), Metasploit console/venom, and other agents | `bash -c …`, `python3 -c …`, `rm`, `dd`, `mkfs.*`, `sudo`, `systemctl`, `apt`, `git`, `nc -lvnp`, `msfconsole` |
+| **Per-tool dangerous options**: target lists read from files (scope bypass), random targets, code execution, file upload/write, interactive shells | `nmap -iL/-iR`, `nmap --script dos/exploit/malware` or custom `.nse` paths, `sqlmap --os-shell/--os-cmd/--file-write/--eval`, `curl -K/-T`, `wget -e/-i`, `nuclei -l/-code` |
+| **Local secrets**: `file://` URLs, the workbench config file and state directory, SSH/GPG/cloud/Codex credential stores, shell histories, `/etc/shadow` | `cat ~/.config/foxworx-workbench/settings.env`, `curl -o ~/.ssh/authorized_keys …` |
+
+**Logging.** Every autonomous command is written to the operator's audit log (`rabbit-auto-job`, with run ID, step and the redacted command line) and to the service journal. Every blocked attempt is recorded as `rabbit-command-blocked` with the reason. Human-reviewed Copilot/Toolbox proposals are not blocked, but guardrail findings appear as `Guardrail:` warnings in the approval preview.
+
+## Why this is not a sandbox (known limits)
+
+Full sandboxing was assessed and is not implemented in this release, for these reasons:
+
+- **Name resolution and redirects.** The guard checks the literal arguments. A permitted in-scope hostname can resolve to, or redirect to, an address outside scope, and tools can follow links or discover new hosts at run time.
+- **Tool semantics.** There are thousands of Kali tools with their own plugins, config files, environment handling and child processes. A generic argv check cannot model all of them, so the deny lists are conservative but not exhaustive. Destinations embedded in unusual syntax, or loaded from files the guard does not recognise, can slip past it.
+- **Same Linux account.** Commands run as the service account with its file and network access. Real containment needs OS-level isolation: a separate unprivileged user, network namespace with an egress allowlist (nftables), seccomp, read-only bind mounts and a per-run workspace. That needs root-owned setup on the host, differs per distribution, and would break tools that need raw sockets or hardware. It is listed as the main follow-up in [verification/SECURITY-REVIEW.md](../verification/SECURITY-REVIEW.md).
+- **False positives are deliberate.** Out-of-scope DNS resolvers, proxies and CIDRs are blocked even when harmless. Add the needed asset to the engagement scope, or run the command manually in the terminal under your own review.
+
+The operator remains responsible for choosing an appropriate assessment environment, network segment and permitted methods. Run high-risk engagements from a dedicated VM or network segment with upstream egress filtering.
+
 ## Execution and privacy boundaries
 
-Installed CLI mode shares the service account's file and network access. Its stated target is not a destination firewall. Arbitrary arguments cannot be generically verified against every tool's network behavior; the operator must choose an appropriate assessment environment and permitted methods. No new sudo or root access is provided.
+Installed CLI mode shares the service account's file and network access, and the guardrails above do not change that. No new sudo or root access is provided.
 
 The selected model receives the objective, scope/notes, supplemental instructions, relevant tool metadata, workflow definitions and bounded job results. Redaction is best effort. Local run records, instructions and job output are not app-encrypted; operators sharing the Linux account can inspect them. DreadFox's separate companion privacy boundary remains unchanged.
 
@@ -62,7 +88,7 @@ Do not sudo-execute application scripts from the operator-writable checkout. Pol
 
 ## Backend API
 
-Use the normal actor access and Origin/CSRF checks. Default token-free deployments use a shared local operator identity.
+Requires a signed-in session plus the normal Origin/CSRF checks. Runs, jobs and audit entries belong to the signed-in operator.
 
 `POST /api/rabbit-runs` accepts:
 

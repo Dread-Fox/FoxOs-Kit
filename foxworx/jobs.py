@@ -17,6 +17,7 @@ from fastapi import HTTPException
 from .config import Settings, child_environment
 from .models import ProposalSpec
 from .registry import Registry
+from .rabbit_guard import check_command, protected_paths
 from .scope import allowed, normalize_target
 from .store import Store, identifier, now
 
@@ -132,6 +133,9 @@ class JobManager:
             selected_interface = self.hardware.require_assessment(owner,spec.interface_name)
             args = ['--interface','if!'+spec.interface_name,*args]
         argv = [item['path'], *args]
+        # Human-reviewed advanced commands get guardrail findings as warnings;
+        # delegated (autonomous) ones are blocked by _check_delegation.
+        guard = [] if guided else self.guard(eng, spec.tool, args)
         pending = [p for p in self.store.list('proposal', owner, 100) if p['status'] == 'pending' and p['expires'] > time.time()]
         if len(pending) >= 30:
             raise HTTPException(429, 'Too many pending proposals. Review or dismiss earlier proposals first.')
@@ -141,7 +145,9 @@ class JobManager:
                 'scope_check':'input-checked' if guided else 'manual-review',
                 'scope_stamp':scope_stamp(eng), 'fingerprint':self.registry.fingerprint(item['path']),
                 'warnings':[item['note'], 'Input checks are not network containment. Full shell and advanced tools can reach outside scope.',
-                            'No interactive stdin. Use the terminal for prompts, pipelines, shell expansion or GUI tools.'],
+                            'No interactive stdin. Use the terminal for prompts, pipelines, shell expansion or GUI tools.',
+                            *('Guardrail: ' + g for g in guard)],
+                'guardrail_findings':guard,
                 'interface_name':spec.interface_name, 'interface_identity':selected_interface['identity'] if selected_interface else '',
                 'expires':time.time() + 600, 'status':'pending', 'timeout':self.cfg.job_timeout}
         data['digest'] = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
@@ -231,6 +237,11 @@ class JobManager:
             self.tasks[id] = asyncio.create_task(self._worker(owner, job))
             return job
 
+    def guard(self, eng: dict, tool: str, args: list[str]) -> list[str]:
+        """Guardrail findings for an argv against this engagement's scope."""
+        return check_command(tool, list(args), eng['include'], eng.get('exclude', []),
+                             workbench_port=self.cfg.port, protected_paths=protected_paths(self.cfg))
+
     def delegate(self,owner: str,proposal: dict,run_id: str,instruction_revision: int) -> dict:
         """Bind a prepared proposal to an existing explicit run authorization."""
         proposal.update(run_id=run_id,run_instruction_revision=instruction_revision)
@@ -262,6 +273,12 @@ class JobManager:
             raise HTTPException(403,'Run target is outside the saved engagement scope')
         if grant.get('execution_mode','workflows')=='installed_cli':
             if not policy.get('allow_installed_cli',False):raise HTTPException(403,'Installed CLI autonomy is disabled')
+            if proposal['profile']=='advanced':
+                # Model-constructed argv: enforce guardrails at delegation,
+                # approval and launch. argv[0] is the resolved executable path.
+                findings=self.guard(eng,proposal['tool'],proposal['argv'][1:])
+                if findings:
+                    raise HTTPException(403,'Guardrail blocked this autonomous command: '+'; '.join(findings))
         elif proposal['profile'] not in grant['profiles']:
             raise HTTPException(403,'Tool is outside the run workflow authorization')
 
