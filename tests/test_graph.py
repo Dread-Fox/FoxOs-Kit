@@ -1,5 +1,4 @@
 """Graph must be evidence-backed, persistent, owner-scoped and not execute tools."""
-from pathlib import Path
 from fastapi import HTTPException
 import pytest
 from foxworx.operation_graph import InvestigationGraph
@@ -7,7 +6,7 @@ from foxworx.operation_graph import InvestigationGraph
 OWNER='local-operator'
 
 def test_graph_reflects_rabbit_and_manual_jobs_and_history(store, cfg, engagement):
-    a=store.put('rabbit', OWNER, {'engagement_id':engagement['id'],'objective':'Inspect lab services','target':'127.0.0.1','status':'running',
+    store.put('rabbit', OWNER, {'engagement_id':engagement['id'],'objective':'Inspect lab services','target':'127.0.0.1','status':'running',
                                   'steps':[{'number':1,'profile':'tcp-connect','status':'failed','job_id':'a'*24},
                                            {'number':2,'profile':'http-status','status':'running','job_id':'b'*24}]})
     store.put('job',OWNER, {'id':'a'*24,'engagement_id':engagement['id'],'tool':'nmap','status':'failed','returncode':1,'started':'2026-10-01T10:00:00+00:00'})

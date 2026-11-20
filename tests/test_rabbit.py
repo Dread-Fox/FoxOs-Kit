@@ -2,7 +2,6 @@
 import asyncio
 import json
 import time
-from unittest.mock import AsyncMock
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -260,7 +259,6 @@ def test_real_managed_curl_job_runs_under_single_rabbit_authorization(cfg):
     from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
     from fastapi.testclient import TestClient
     from foxworx.app import create_app
-    from foxworx.registry import Registry
     from shutil import which
     if not which('curl'): pytest.skip('curl is unavailable in the build environment')
     class Lab(BaseHTTPRequestHandler):

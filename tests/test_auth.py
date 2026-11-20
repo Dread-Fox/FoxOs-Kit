@@ -347,3 +347,12 @@ def test_rotate_token_revokes_sessions(cfg, tmp_path, monkeypatch, capsys):
     assert accounts.session(cookie) is None
     new = Settings.load(path)
     assert new.local_token == '' and new.has_token_hash and not new.check_setup_token(cfg.local_token)
+
+
+def test_security_headers_and_hsts_only_over_https(cfg):
+    with app_client(cfg) as c:
+        r = c.get('/api/auth-mode')
+        assert "frame-ancestors 'none'" in r.headers['content-security-policy']
+        assert r.headers['x-frame-options'] == 'DENY' and 'strict-transport-security' not in r.headers
+    with app_client(replace(cfg, public_origin=PUBLIC), base=PUBLIC) as c:
+        assert c.get('/api/auth-mode', headers={'CF-Ray': 'x'}).headers['strict-transport-security'].startswith('max-age=')

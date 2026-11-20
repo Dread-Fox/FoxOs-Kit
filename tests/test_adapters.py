@@ -1,7 +1,6 @@
 """Security and functionality tests for the administrator-controlled adapter registry."""
 import json
 import pytest
-from fastapi import HTTPException
 from foxworx.adapters import AdapterPolicy, PolicyError, parse_document, ADAPTERS
 from foxworx.jobs import PROFILES, recipe
 from foxworx.models import ProposalSpec, RabbitSpec
@@ -87,7 +86,8 @@ def test_no_user_supplied_arbitrary_profile():
 
 def test_root_owned_policy_can_activate_and_root_revocation_is_immediate():
     """Real filesystem permission check when the test runner is privileged."""
-    import os, tempfile
+    import os
+    import tempfile
     from pathlib import Path
     if os.geteuid()!=0:
         pytest.skip('A non-root test process cannot create a root-owned policy directory')

@@ -1,5 +1,26 @@
 # Security model · v3.4.0
 
+## Reporting a vulnerability
+
+Please report security issues **privately**. Do not open a public issue, pull request or discussion with vulnerability details.
+
+1. **Preferred:** use GitHub private vulnerability reporting: open the repository's **Security** tab and choose **Report a vulnerability** (`https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/security/advisories/new`).
+2. If that option is not available, open a public issue titled "Security contact request" **with no technical details**, and a maintainer will arrange a private channel.
+
+Include the affected version or commit, configuration (auth mode, tunnel or proxy in use), reproduction steps, impact, and any proof of concept. Do not access data that isn't yours, run destructive tests, or test against systems you are not authorized to assess.
+
+| Step | Target |
+|---|---|
+| Acknowledge the report | within 3 business days |
+| Initial assessment and severity (CVSS 3.1) | within 10 business days |
+| Fix or mitigation for Critical/High issues | within 30 days, where feasible |
+| Coordinated disclosure | after a fix is released, or after 90 days by agreement |
+
+Reporters are credited in the advisory and CHANGELOG unless they ask otherwise.
+
+**Supported versions:** only the latest release on `main` (currently 3.4.x) receives security fixes. v3.3.x and earlier shipped an unauthenticated default and should be upgraded.
+
+
 ## Intended trust boundary
 
 This is a **trusted-operator Linux workstation**, not a hosted service for mutually distrustful tenants. Full shell access gives a web operator the authority of the process's Linux account. Web actor checks organize access but do not stop that shell user from reading/modifying the same UID's evidence, database, source, configuration, API keys or processes. The API-key environment allowlist reduces accidental inheritance, not same-account secret access.
@@ -26,6 +47,17 @@ Prefer one operator/account/node, or only operators trusted equally with that no
 No hostile multi-tenancy; no enforced HackerOne scope for terminal/advanced commands; no DNS-rebinding-resistant or redirect-aware egress sandbox; no automatic API scope sync; no live authorization verification; no guaranteed scanner request rate across arbitrary modules; no complete/signed/tamper-proof terminal audit; no disk quota; no root tool parity; no built-in GUI desktop; no independently audited production-hardening claim.
 
 The Nmap recipe's scan-rate flag is not a universal application-request governor. WHOIS referrals and DNS resolvers contact infrastructure beyond the literal supplied hostname. HTTP guided headers do not follow redirects, but advanced/native tools can. CNAMEs, shared hosting, wildcard ownership and program-specific prohibitions require manual review.
+
+## Prompt injection
+
+Tool output, web pages, manuals, fetched documentation and Discord messages can contain text designed to steer a model. Mitigations:
+
+- Untrusted content is passed to models inside clearly labelled data fields (`untrusted_output_excerpt`, `documentation_reference_untrusted`, `untrusted_discord_team_intelligence`), and system prompts state that it is never an instruction or authorization.
+- Copilot and Tutor can only **propose** commands; a human must approve each one in the UI, and the approval is bound to an exact command digest.
+- Rabbit Hole cannot change its target, budget or policy; only the operator endpoint can add instructions. Every command it builds passes `rabbit_guard` (scope of each destination argument, executable and option deny lists, credential and workbench config paths), so injected text cannot point it at out-of-scope hosts, the workbench's own API, or local secrets.
+- Job output is redacted on a best-effort basis before being sent to a model.
+
+Residual risk: an injected instruction can still make the agent run a *different permitted* tool against an *in-scope* target, or write misleading summaries. Review run steps and evidence rather than relying on model-reported results.
 
 ## Sensitive data and persistence
 

@@ -1,12 +1,57 @@
 # FOXWORX Kali Workbench · v3.4.0
 
-FOXWORX DreadFoxHacker is a browser-based workbench for **authorized FoxWorx operators**. It brings a Linux terminal, local tool discovery, managed jobs, evidence, and optional AI assistance into one workspace for authorized security assessments and lab work.
+[![CI](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.11%2B-blue)
+![License](https://img.shields.io/badge/license-proprietary-lightgrey)
 
-Run the service on a compatible Linux machine and open it locally or through an independently configured remote connection. Raspberry Pi and Z790 systems are examples, not required hardware.
+**FOXWORX Kali Workbench** is a self-hosted, browser-based workspace for authorized penetration testing on Kali Linux. It combines a real terminal, an installed-tool catalog, human-approved managed jobs, engagement scoping and evidence export, and optional AI assistance (Tutor, Copilot, and the bounded autonomous **Rabbit Hole** agent) behind one authenticated web UI. It is built with FastAPI and vanilla JavaScript, runs as a non-root systemd user service, and works on x86-64 workstations and ARM64 Raspberry Pi hosts.
+
+Engineering highlights:
+
+- **Secure by default:** sign-in on every UI, API and WebSocket route; per-operator accounts; server-side revocable sessions; session-bound CSRF; Host allowlisting against DNS rebinding; strict CSP. See the [security model](#security-model).
+- **AI with guardrails:** models can propose commands but never approve them. Autonomous runs are bounded by a root-owned policy, finite budgets, and argument-level scope enforcement with full audit logging.
+- **Tested:** 370+ automated tests, run in CI along with Ruff, Bandit and pip-audit on every push, plus live-server and headless-browser smoke tests ([verification/](verification/)).
 
 **License:** © 2026 FoxWorx LLC. This is proprietary software. Employees and contractors may use it within their express FoxWorx LLC authorization; other use requires permission under the [LICENSE](LICENSE). A public GitHub repository does not grant a public license. Third-party components retain their own licenses.
 
 > **Access model:** The service listens only on `http://127.0.0.1:8765` and **requires sign-in** for the web UI, the API and every terminal WebSocket. The installer prints a one-time setup token; named operator accounts get their own passwords, sessions and audit trail. A no-login mode exists only as an explicit, loopback-only opt-in. See [local service and remote access](docs/LOCAL-SERVICE.md) and the [security model](#security-model).
+
+| Sign-in | Workbench (fixture data) |
+|---|---|
+| ![Sign-in page](verification/ui-login.png) | ![Workbench with terminal, toolbox and AI copilot](verification/ui-desktop-dark.png) |
+
+## Architecture
+
+```mermaid
+flowchart LR
+    B["Browser<br/>(vanilla JS, xterm.js, strict CSP)"] -->|"HTTPS tunnel / SSH forward<br/>or local"| P["127.0.0.1:8765<br/>uvicorn, 1 worker"]
+    subgraph Service["foxworx-workbench (non-root systemd user service)"]
+      P --> MW["Middleware<br/>Host allowlist · session auth · Origin + CSRF · size limits · security headers"]
+      MW --> API["FastAPI routes<br/>(app.py)"]
+      MW --> WS["Terminal WebSocket<br/>session + one-use ticket"]
+      API --> JOBS["JobManager<br/>immutable proposals → approval → argv subprocess"]
+      API --> AI["Copilot / Tutor<br/>propose only"]
+      API --> RH["Rabbit Hole runner<br/>finite grant + rabbit_guard"]
+      RH --> JOBS
+      WS --> PTY["PTY shells"]
+      API --> DB[("SQLite state 0600<br/>accounts · sessions · records · audit")]
+      JOBS --> EV["Engagement workspaces<br/>job logs · evidence export"]
+    end
+    AI --> LLM["LiteLLM gateway<br/>cloud or local models"]
+    RH --> LLM
+    POL["/etc/foxworx/adapter-policy.json<br/>(root-owned)"] -.-> RH
+    JOBS --> T["Installed Kali tools<br/>→ authorized targets"]
+```
+
+| Component | Source | Responsibility |
+|---|---|---|
+| Auth & sessions | `foxworx/auth.py`, `foxworx/accounts.py` | Host/Origin checks, login, scrypt accounts, server-side sessions, CSRF, throttling |
+| Config | `foxworx/config.py`, `foxworx/cli.py` | Fail-closed settings validation, installer upgrade logic, operator management |
+| Jobs | `foxworx/jobs.py`, `foxworx/command_templates.py` | Digest-bound proposals, single-use approval, bounded argv subprocesses |
+| Scope | `foxworx/scope.py`, `foxworx/rabbit_guard.py` | Target normalisation and matching; argument-level guardrails for autonomous commands |
+| AI | `foxworx/ai.py`, `foxworx/rabbit.py`, `foxworx/model_gateway.py`, `foxworx/providers.py` | Model routing, tool-calling, encrypted per-operator API keys |
+| Terminal | `foxworx/terminal.py` | Persistent PTYs with bounded replay |
+| Evidence | `foxworx/evidence.py` | No-follow file access, uploads without overwrite, checksummed exports |
 
 ## Supported platforms
 
@@ -151,6 +196,23 @@ A separately managed HTTPS reverse proxy or tunnel (Cloudflare is optional) can 
 
 Install each host independently, with its own service, configuration, and data. Discord can provide optional team context, but FOXWORX does not provide centralized fleet management or automatic evidence synchronization. See [local and remote access](docs/LOCAL-SERVICE.md) and [security boundaries](docs/SECURITY.md).
 
+## Security model
+
+| Control | Implementation |
+|---|---|
+| Authentication | Required by default (`local` mode). Named operator accounts (scrypt) or a one-time setup token stored only as a SHA-256 hash. Enforced centrally in middleware for every `/api/*` route, plus `/` and the terminal WebSocket. |
+| Sessions | Server-side, 8 h (7 days if remembered), revoked on sign-out, password change, operator removal or token rotation. Cookie is `HttpOnly`, `SameSite=Strict`, and `Secure` over HTTPS. |
+| CSRF / origin | Exact same-origin `Origin` plus a session-bound CSRF token on every mutation. The `Host` header must match an allowlist in every mode, which blocks DNS rebinding. |
+| Brute force | Sign-in throttling per client, per operator name and globally; failures are logged and audited without the secret. |
+| Network exposure | Loopback bind only; remote access through SSH or an HTTPS tunnel with a registered public origin. Open (no-login) mode is opt-in, loopback-only, and refuses proxied requests. |
+| Command execution | No shell interpolation: jobs are argv lists. AI can only propose; approvals are digest-bound and single-use. |
+| Autonomous agent | Root-owned policy, finite budgets, and `rabbit_guard` checks of every model-built command (scope of every host/IP/URL argument, deny lists, credential paths), with every command audited. **Not an OS sandbox.** |
+| Browser hardening | Strict CSP (`script-src 'self'`), `X-Frame-Options: DENY`, HSTS over HTTPS, no inline HTML from data (text rendering only), locally bundled assets. |
+| Secrets | Config 0600 and state 0700 outside the repo. Provider keys encrypted at rest (Fernet). Child processes get a minimal environment. |
+| Supply chain | Pinned dependencies, pip-audit, Bandit and Ruff in CI. |
+
+**Trust boundary.** All operators' terminals run as the same Linux account, so operator accounts provide accountability and data separation inside the app, not OS isolation. Read [docs/SECURITY.md](docs/SECURITY.md) for the full model and known limits, and [verification/SECURITY-REVIEW.md](verification/SECURITY-REVIEW.md) for the latest review. Report vulnerabilities privately as described in [docs/SECURITY.md](docs/SECURITY.md#reporting-a-vulnerability).
+
 ## Operational limits and verification
 
 This is a tested development distribution for trusted operators. It has not undergone an independent security audit, and the checks do not establish compatibility with every supported architecture, physical device, inference provider, or external integration.
@@ -165,7 +227,8 @@ For verification details, consult the dated [release report](verification/TEST-R
 - [Operator guide](docs/OPERATOR-GUIDE.md)
 - [Configuration reference](docs/CONFIGURATION.md)
 - [Platform and optional GPU setup](docs/PLATFORMS.md)
-- [Security boundaries](docs/SECURITY.md)
+- [Security model and vulnerability reporting](docs/SECURITY.md)
+- [Latest security review](verification/SECURITY-REVIEW.md)
 - [Tool coverage and prerequisites](docs/TOOL-COVERAGE.md)
 - [Tool Intelligence](docs/TOOL-INTELLIGENCE.md)
 - [Ranked tool discovery](docs/TOOL-DISCOVERY.md)

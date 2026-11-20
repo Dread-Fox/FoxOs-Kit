@@ -10,7 +10,6 @@ import hashlib
 import logging
 import shlex
 import time
-from datetime import datetime, timezone
 from fastapi import HTTPException
 from .jobs import PROFILES, ACTIVE, scope_stamp
 from .adapters import AdapterPolicy
@@ -20,7 +19,7 @@ from .models import ProposalSpec, RabbitSpec, RabbitMessage
 from .tool_discovery import LOOKUP_PARAMETERS
 from .scope import allowed
 from urllib.parse import urlsplit
-from .store import identifier, now
+from .store import now
 from .ai import redact
 
 LOG = logging.getLogger(__name__)
@@ -532,7 +531,7 @@ class RabbitRunner:
 
     async def shutdown(self):
         tasks=list(self.tasks.items())
-        for rid,task in tasks: task.cancel()
+        for _rid,task in tasks: task.cancel()
         if tasks:
             await asyncio.gather(*(task for _,task in tasks),return_exceptions=True)
             for rid,_ in tasks:

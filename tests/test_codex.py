@@ -5,7 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from fastapi import HTTPException
 import pytest
-from foxworx.codex_agent import CodexAgent, CodexProcess, safe_account
+from foxworx.codex_agent import CodexAgent, CodexProcess
 from foxworx.app import create_app
 from fastapi.testclient import TestClient
 from foxworx.jobs import JobManager

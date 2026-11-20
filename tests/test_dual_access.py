@@ -1,6 +1,5 @@
 """v3.3.3+: one protected app, independent localhost and HTTPS tunnel origins."""
 from dataclasses import replace
-from pathlib import Path
 import time
 import pytest
 from dotenv import dotenv_values
@@ -9,7 +8,7 @@ from foxworx.app import create_app
 from foxworx.cli import initialize, main
 from foxworx.config import Settings
 
-PUBLIC='https://foxworxhacker1.dreadfoxtrader.com'
+PUBLIC='https://workbench.example.com'
 
 
 def test_explicit_public_origin_remains_opt_in(cfg):
@@ -46,9 +45,9 @@ def test_two_origins_host_restriction_and_forwarded_headers(cfg):
 
 
 def test_https_host_is_never_automatically_trusted(cfg):
-    for bad in ('http://foxworxhacker1.dreadfoxtrader.com','https://foxworxhacker1.dreadfoxtrader.com/route',
-                'https://127.0.0.1','https://operator:pass@foxworxhacker1.dreadfoxtrader.com',
-                'https://foxworxhacker1.dreadfoxtrader.com?x=1'):
+    for bad in ('http://workbench.example.com','https://workbench.example.com/route',
+                'https://127.0.0.1','https://operator:pass@workbench.example.com',
+                'https://workbench.example.com?x=1'):
         with pytest.raises(ValueError):
             replace(cfg,public_origin=bad).validate()
 

@@ -6,13 +6,11 @@ import hmac
 import hashlib
 import json
 import os
-from pathlib import Path
 import shlex
 import signal
 import shutil
 import stat
 import time
-from urllib.parse import urlsplit
 from fastapi import HTTPException
 from .config import Settings, child_environment
 from .models import ProposalSpec

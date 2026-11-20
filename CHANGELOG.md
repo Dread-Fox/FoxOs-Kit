@@ -18,6 +18,16 @@
 - Deny lists for interpreters/launchers, destructive, privilege, system-configuration, package-manager and remote-shell executables; per-tool options that read target files, execute code or write files (for example `nmap -iL/-iR`, `sqlmap --os-shell/--eval`, `curl -K/-T`); `file://` URLs and credential/config/state paths.
 - Every autonomous command is audited (`rabbit-auto-job`, with run, step and redacted command line) and logged; blocked attempts are audited as `rabbit-command-blocked` with the reason. Human-reviewed proposals show the same findings as `Guardrail:` warnings.
 - Documented why full sandboxing is out of scope for this release and what would be required (docs/RABBIT-HOLE.md).
+- Hardened during review: scheme-less `host/path` arguments and decimal/hex/octal/shortened IPv4 encodings (for example `2130706433:8765`) are now checked or blocked; `0.0.0.0` and IPv4-mapped loopback count as the workbench listener.
+
+### Security review, dependencies and CI
+
+- Full-repository review published in `verification/SECURITY-REVIEW.md` (findings, severities, fixes and recommendations).
+- Dependency upgrades to clear pip-audit advisories: FastAPI 0.165.0 / Starlette 1.10.0 (now pinned), PyJWT 2.15.1, uvicorn 0.54.0, LiteLLM 1.110.1 with filelock 4.2.12, pytest 9.0.3.
+- Added HSTS (HTTPS origins only), `Cross-Origin-Opener-Policy` and `Cross-Origin-Resource-Policy` headers. `.gitignore` now covers `settings.env` and its backups.
+- New GitHub Actions CI: tests on Python 3.11 and 3.13, Ruff, Bandit and pip-audit on every push. Added `ruff.toml` and `bandit.yaml` with documented exceptions; removed unused imports and variables.
+- `docs/SECURITY.md` now has a private vulnerability reporting process, response targets and a prompt-injection section. README has a project overview, CI badge, architecture diagram, screenshots and a security-model summary.
+- Updated live and browser smoke tests for sign-in; regenerated UI screenshots; replaced a real tunnel hostname in tests with `example.com`.
 
 ## v3.3.3 — Token-free workbench and tunnel-independent operation
 

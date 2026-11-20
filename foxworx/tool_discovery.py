@@ -196,7 +196,7 @@ class ToolDiscovery:
         exact=query.strip().casefold()
         if exact:
             # A bounded prefix range supports executable names with punctuation.
-            names=snap['names'];lower=[exact] if exact in snap['entries'] else []
+            lower=[exact] if exact in snap['entries'] else []
             for name in lower:scores[name]+=100;matches[name].add('exact name')
         candidates=list(scores) if terms else (snap['names'] if not query.strip() else [])
         candidates=[name for name in candidates if (not category or snap['entries'][name]['category']==category)

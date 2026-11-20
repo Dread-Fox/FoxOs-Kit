@@ -19,6 +19,8 @@ EXC = ['10.0.0.99', 'admin.example.com']
     ('gobuster', ['dir', '-u', 'http://example.com', '-w', '/usr/share/wordlists/dirb/common.txt']),
     ('hydra', ['-l', 'admin', '-P', 'passwords.lst', 'ssh://10.0.0.7']),
     ('whatweb', ['--aggression=1', 'http://example.com/']),
+    ('curl', ['example.com/robots.txt']),
+    ('nmap', ['--top-ports', '100', '--max-rate', '10', '--host-timeout', '0.5', '10.0.0.5:443']),
 ])
 def test_in_scope_commands_pass(tool, args):
     assert check_command(tool, args, INC, EXC, workbench_port=8765) == []
@@ -52,6 +54,16 @@ def test_in_scope_commands_pass(tool, args):
     ('sudo', ['nmap', '10.0.0.5'], 'deny list'),
     ('nc', ['-lvnp', '4444'], 'deny list'),
     ('cat', ['/home/op/.config/foxworx-workbench/settings.env'], 'credential stores'),
+    # Scheme-less host/path and alternate IPv4 encodings (resolver tricks).
+    ('curl', ['evil.test/path'], 'evil.test is outside'),
+    ('curl', ['2130706433:8765/api/session'], 'non-canonical'),
+    ('curl', ['http://2130706433:8765/'], 'outside the engagement scope'),
+    ('curl', ['0x7f000001:8765'], 'non-canonical'),
+    ('curl', ['127.1:8765'], 'non-canonical'),
+    ('curl', ['0177.0.0.1:8765'], 'non-canonical'),
+    ('curl', ['134744072'], 'non-canonical'),
+    ('curl', ['http://0.0.0.0:8765/'], 'workbench listener'),
+    ('curl', ['http://[::ffff:127.0.0.1]:8765/'], 'workbench listener'),
 ])
 def test_dangerous_or_out_of_scope_commands_blocked(tool, args, reason):
     problems = check_command(tool, args, INC, EXC, workbench_port=8765)

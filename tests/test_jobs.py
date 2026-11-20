@@ -1,5 +1,4 @@
 import asyncio
-import json
 import pytest
 from fastapi import HTTPException
 from foxworx.registry import Registry

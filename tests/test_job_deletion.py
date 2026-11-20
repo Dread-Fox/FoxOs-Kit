@@ -7,8 +7,8 @@ import zipfile
 import pytest
 from fastapi import HTTPException
 
-from test_jobs import manager, proposal, finished
-from test_api import client, logged
+from test_jobs import manager, proposal, finished  # noqa: F401  (pytest fixtures)
+from test_api import client, logged  # noqa: F401  (pytest fixtures)
 from foxworx.operation_graph import InvestigationGraph
 
 

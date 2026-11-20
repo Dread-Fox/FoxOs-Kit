@@ -1,6 +1,4 @@
 """v2.9 persistent read-only discovery and documentation safety contract."""
-import os
-from pathlib import Path
 from unittest.mock import Mock
 import pytest
 

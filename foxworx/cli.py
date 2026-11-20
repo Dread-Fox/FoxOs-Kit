@@ -71,7 +71,8 @@ def new_setup_token(values: dict[str, str]) -> str:
     """Generate a setup token, store only its hash, and return it for one-time display."""
     token = secrets.token_urlsafe(32)
     values['FOXWORX_LOCAL_TOKEN_HASH'] = hash_setup_token(token)
-    values['FOXWORX_LOCAL_TOKEN'] = ''
+    # Bandit B105 false positive: clears the legacy plaintext token.
+    values['FOXWORX_LOCAL_TOKEN'] = ''  # nosec B105
     return token
 
 
@@ -114,7 +115,8 @@ def initialize(path: Path, *, profile: str = 'auto') -> str | None:
         'FOXWORX_AUTH_MODE':'local', 'FOXWORX_PORT':'8765', 'FOXWORX_BIND_HOST':'127.0.0.1',
         'FOXWORX_ORIGIN':'http://127.0.0.1:8765', 'FOXWORX_PUBLIC_ORIGIN':'',
         'FOXWORX_SESSION_SECRET':secrets.token_urlsafe(48),
-        'FOXWORX_LOCAL_TOKEN':'', 'FOXWORX_LOCAL_TOKEN_HASH':'', 'FOXWORX_OPEN_MODE_ACK':'',
+        # Bandit B105 false positive: empty placeholders; the token is generated below.
+        'FOXWORX_LOCAL_TOKEN':'', 'FOXWORX_LOCAL_TOKEN_HASH':'', 'FOXWORX_OPEN_MODE_ACK':'',  # nosec B105
         'FOXWORX_AI_ENCRYPTION_KEY':secrets.token_urlsafe(48),
         'FOXWORX_AI_ENDPOINTS':'{}',
         'FOXWORX_STATE':str(Path.home()/'.local/share/foxworx-workbench-v2'),
@@ -366,7 +368,7 @@ def doctor(cfg: Settings) -> int:
     from .store import Store
     if not cfg.ai_encryption_key: warnings.append('Dedicated AI encryption key is missing; run configure --init to migrate before saving browser credentials.')
     try:
-        from litellm import acompletion
+        from litellm import acompletion  # noqa: F401  (availability probe)
         ai_sdk=True
     except ImportError:
         ai_sdk=False

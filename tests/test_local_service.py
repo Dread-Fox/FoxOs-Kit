@@ -1,11 +1,8 @@
 """Local service regression: no Cloudflare, no public bind, login required by default."""
 from dataclasses import replace
-from pathlib import Path
-import json
 from dotenv import dotenv_values
 import pytest
 from fastapi.testclient import TestClient
-from foxworx.auth import Auth
 from foxworx.cli import initialize, main
 from foxworx.config import Settings
 from foxworx.app import create_app

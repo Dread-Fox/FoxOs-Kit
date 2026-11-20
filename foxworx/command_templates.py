@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
-from urllib.parse import urlsplit
 from .scope import normalize_target
 from .jobs import PROFILES
 
@@ -63,14 +62,16 @@ def validate_template(document: dict) -> dict:
                 raise ValueError('Invalid bounded integer parameter')
         elif schema.get('type')=='enum':
             choices=schema.get('choices')
-            if set(schema)!={'type','choices','default'} or not isinstance(choices,list) or not 1<=len(choices)<=12 or len(set(map(str,choices)))!=len(choices) or not all(isinstance(x,str) and TOKEN.fullmatch(x) for x in choices) or schema['default'] not in choices or any(x in DANGEROUS_FLAGS or x.split('=',1)[0] in DANGEROUS_FLAGS or x.startswith(('/tmp/','/home/','http://','https://')) for x in choices):
+            # Bandit B108 false positive: deny-list prefixes, not temp-file use.
+            if set(schema)!={'type','choices','default'} or not isinstance(choices,list) or not 1<=len(choices)<=12 or len(set(map(str,choices)))!=len(choices) or not all(isinstance(x,str) and TOKEN.fullmatch(x) for x in choices) or schema['default'] not in choices or any(x in DANGEROUS_FLAGS or x.split('=',1)[0] in DANGEROUS_FLAGS or x.startswith(('/tmp/','/home/','http://','https://')) for x in choices):  # nosec B108
                 raise ValueError('Invalid enum parameter')
         else:
             raise ValueError('Freeform string arguments are prohibited')
     used=set()
     for value in argv:
         if value == '{target}': continue
-        if ((value in DANGEROUS_FLAGS or value.split('=',1)[0] in DANGEROUS_FLAGS) and not (tool=='smbclient' and value=='-L')) or value.startswith(('/tmp/','/home/','/var/tmp/','file://','http://','https://')):
+        # Bandit B108 false positive: deny-list prefixes, not temp-file use.
+        if ((value in DANGEROUS_FLAGS or value.split('=',1)[0] in DANGEROUS_FLAGS) and not (tool=='smbclient' and value=='-L')) or value.startswith(('/tmp/','/home/','/var/tmp/','file://','http://','https://')):  # nosec B108
             raise ValueError('Unreviewed redirects, writes, scripts, proxy or writable paths prohibited')
         if value.startswith('-') and ('=' in value or ':' in value):
             # Fixed --key=value is permitted; no dynamic interpolation inside flags.
@@ -110,7 +111,8 @@ def compile_template(document: dict, target: str, parameters: dict | None = None
     out=[]
     for token in document['argv']:
         match=PLACEHOLDER.fullmatch(token)
-        out.append(t if token=='{target}' else values[match.group(1)] if match else token)
+        # Bandit B105 false positive: template placeholder, not a password.
+        out.append(t if token=='{target}' else values[match.group(1)] if match else token)  # nosec B105
     return out
 
 

@@ -1,5 +1,4 @@
 """Companion conversations must never gain access to workbench operations."""
-import asyncio
 import json
 import pytest
 from fastapi import HTTPException

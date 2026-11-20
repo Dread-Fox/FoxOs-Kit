@@ -107,7 +107,7 @@ def test_pet_api_authorization_isolation_and_no_ai_dependency(petclient):
 def test_pet_observer_queue_tracks_existing_audit_without_blocking(petclient):
     c=petclient
     c.post('/api/pet/hatch',json={})
-    eng=c.get('/api/engagements').json()[0]['id']
+    assert c.get('/api/engagements').json()[0]['id']
     res=c.post('/api/engagements',json={'name':'Second local lab','include':['localhost'],'exclude':[]})
     assert res.status_code==200
     # The real app's audit observer must deliver asynchronously to pet, not on request path.

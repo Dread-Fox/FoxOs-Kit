@@ -60,7 +60,7 @@ async function boot(){
       throw e;
     }
     S.csrf=S.session.csrf;$('login-screen').hidden=true;$('workbench').hidden=false;
-    $('node-name').textContent=S.session.host;$('auth-badge').textContent=S.session.mode==='open'?'No login (local only)':(S.session.mode==='cloudflare'?'Access verified':(S.session.public_origin?'Local + HTTPS':'Local setup'));
+    $('node-name').textContent=S.session.host;$('auth-badge').textContent=S.session.mode==='open'?'No login (local only)':(S.session.mode==='cloudflare'?'Access verified':(S.session.public_origin?'Signed in · HTTPS ready':'Signed in'));
     $('operator-label').textContent=S.session.actor;
     $('ai-badge').textContent='Loading…';$('send-chat').disabled=true;
     await refreshAISettings();

@@ -38,7 +38,7 @@ def run():
         for width in (320, 390, 1600):
             page = browser.new_page(viewport={'width': width, 'height': 900}, has_touch=True)
             errors = []
-            page.on('pageerror', lambda error: errors.append(str(error)))
+            page.on('pageerror', lambda error: errors.append(str(error)))  # noqa: B023  (page closes in this iteration)
 
             def serve(route):
                 path = route.request.url.split('foxworx.test/', 1)[1]

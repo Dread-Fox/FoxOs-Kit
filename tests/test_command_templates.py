@@ -57,9 +57,7 @@ def test_job_manager_prepares_registered_adapter_without_raw_model_argv(cfg,stor
     from foxworx.jobs import JobManager
     from foxworx.registry import Registry
     from foxworx.adapters import AdapterPolicy
-    from foxworx.store import identifier
     from fastapi import HTTPException
-    import shutil
     jobs=JobManager(cfg,store,Registry(cfg))
     owner='local-operator'
     eng=store.put('engagement',owner,{'name':'local','include':['127.0.0.1'],'exclude':[],'notes':''})
@@ -91,7 +89,6 @@ async def test_rabbit_runner_supports_registered_templates_with_typed_values(cfg
     def prepare_registered(owner,engagement_id,adapter,target,parameters,reason,revision,source):
         invoked.append((adapter['id'],parameters,target,source));return {'id':'prepared','digest':'a'*64}
     jobs.prepare_registered=prepare_registered
-    from unittest.mock import AsyncMock
     gateway=FakeGateway([{'content':'','calls':[{'name':'choose_workflow','arguments':__import__('json').dumps({'profile':'probe-http','reason':'Inspect','parameters':{'attempts':1}})}]},finish('solved')])
     runner=RabbitRunner(cfg,store,jobs,FakeProviders(),gateway)
     adapter={**BASE,'target_kind':'host','argv':['--head','{target}','--retry','{param:attempts}'],'parameters':{'attempts':{'type':'integer','min':0,'max':2,'default':0}}}
@@ -110,7 +107,6 @@ def test_registered_adapter_api_creates_only_approval_preview(cfg,monkeypatch):
     from fastapi.testclient import TestClient
     from foxworx.app import create_app
     from foxworx.adapters import AdapterPolicy
-    from fastapi import HTTPException
     adapter={**BASE,'target_kind':'url','argv':['--head','{target}'],'parameters':{}}
     state={'status':'active','revision':'rev-v2','enabled_profiles':('probe-http',),
            'registered_adapters':{'probe-http':adapter},'max_steps':5,'max_minutes':5}

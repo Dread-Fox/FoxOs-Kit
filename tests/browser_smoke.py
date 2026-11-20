@@ -21,7 +21,7 @@ function memoryStorage(){const values=new Map();return {getItem:k=>values.get(k)
 Object.defineProperty(window,'localStorage',{value:memoryStorage()});Object.defineProperty(window,'sessionStorage',{value:memoryStorage()});
 window.confirm=()=>true;window.__calls=[];
 const engagement={id:'aaaaaaaaaaaaaaaaaaaaaaaa',name:'Local lab · UI fixture',include:['127.0.0.1','localhost'],exclude:[],notes:'Authorized local testing. UI fixture, not a live assessment.',program_url:'',team_key:'lab-team'};
-const node={version:'3.3.3',actor:'operator@example.test',csrf:'fixture-csrf',host:'kali-z790 · preview',architecture:'x86_64',python:'3.13',uid:1000,mode:'open',free_disk_bytes:18000000000,active_jobs:0,max_jobs:4,max_terminals:8,installed_executables:FIXTURE.tools.filter(t=>t.installed).length,curated_installed:18,curated_total:72,hardware:{architecture:'x86_64',profile:'workstation',device:'Linux host',distro:'kali',cpu_count:24,gpu_count:3,gpu_status:'available',ollama_installed:true,gpus:[{index:0,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:7300},{index:1,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:7100},{index:2,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:6800}],warnings:[]},ai_configured:true,ai_provider:'openai',ai_model:'gpt-fixture',state_directory:'~/.local/share/foxworx-workbench-v2',config_file:'~/.config/foxworx-workbench/settings.env',limits:{job_timeout_seconds:900,job_log_bytes:5242880},warnings:['Trusted operators share this Linux account.','GUI tools require a separate desktop.']};
+const node={version:'3.4.0',actor:'alice',csrf:'fixture-csrf',host:'kali-z790 · preview',architecture:'x86_64',python:'3.13',uid:1000,mode:'local',free_disk_bytes:18000000000,active_jobs:0,max_jobs:4,max_terminals:8,installed_executables:FIXTURE.tools.filter(t=>t.installed).length,curated_installed:18,curated_total:72,hardware:{architecture:'x86_64',profile:'workstation',device:'Linux host',distro:'kali',cpu_count:24,gpu_count:3,gpu_status:'available',ollama_installed:true,gpus:[{index:0,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:7300},{index:1,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:7100},{index:2,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:6800}],warnings:[]},ai_configured:true,ai_provider:'openai',ai_model:'gpt-fixture',state_directory:'~/.local/share/foxworx-workbench-v2',config_file:'~/.config/foxworx-workbench/settings.env',limits:{job_timeout_seconds:900,job_log_bytes:5242880},warnings:['Trusted operators share this Linux account.','GUI tools require a separate desktop.']};
 let sessions=[],jobs=[],proposals=[],jobText='',rabbitRuns=[],savedToolNotes=[],teamDrafts=[],sharedChat=[],jobDeleteError=false;
 
 const hardware={nvidia:[{index:0,name:'NVIDIA GeForce RTX 3060 Ti',memory_mib:8192,free_mib:7300,driver_version:'580'}],nvidia_status:'available',summary:{network_interfaces:3,wireless_interfaces:1,pci_devices:2,usb_devices:1,render_devices:1,accelerators:0,accelerator_candidates:1},
@@ -50,7 +50,7 @@ const aiProviders=[
 {id:'ollama',label:'Ollama · local',cloud:false,has_key:false,requires_key:false,examples:['qwen3:8b'],endpoints:[{id:'ollama-local',label:'ollama-local'}],tool_support:'model-dependent'}];
 const aiSettings={selected:{provider:'openai',model:'gpt-fixture',endpoint_id:''},providers:aiProviders,ready:true,engine_installed:true};
 window.fetch=async(path,opts={})=>{window.__calls.push({path,method:opts.method||'GET',body:opts.body});const u=new URL(path,'http://fixture.test'),method=opts.method||'GET';let value={},status=200;const data=opts.body?JSON.parse(opts.body):{};
-if(u.pathname==='/api/auth-mode')value={mode:'open'};
+if(u.pathname==='/api/auth-mode')value={mode:'local',login:true,version:'3.4.0',public_origin:''};
 else if(u.pathname==='/api/session'||u.pathname==='/api/diagnostics')value=node;
 else if(u.pathname==='/api/pet'&&method==='GET')value=snapshot();
 else if(u.pathname==='/api/pet/hatch'&&method==='POST'){companion=newCompanion();petMode='offline';petFocus='auto';petMessages=[];pulseOn=false;pulseSignals=[];value=companion;}
@@ -490,7 +490,7 @@ with sync_playwright() as p:
     assert len(page.evaluate("window.__calls.filter(c=>c.path?.endsWith('/approve'))"))==1
     page.click('#job-to-ai');assert not page.locator('#share-output').is_checked()
     page.click('#theme-toggle');page.screenshot(path=str(OUT/'ui-desktop-light.png'),full_page=True)
-    assert page.locator('#login-screen').is_hidden() and page.locator('#logout-button').is_hidden(), 'Token-free UI must not prompt for login or offer sign out'
+    assert page.locator('#login-screen').is_hidden() and page.locator('#logout-button').is_visible(), 'Signed-in UI must hide the login screen and offer sign out'
     assert page.locator('#delete-selected').is_visible() and page.locator('#delete-selected').is_enabled()
     page.evaluate('window.confirm=()=>false')
     page.click('#delete-selected');page.wait_for_timeout(40)

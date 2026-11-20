@@ -5,7 +5,6 @@ from foxworx.ai import Copilot
 from foxworx.jobs import JobManager
 from foxworx.registry import Registry
 from foxworx.models import ChatSpec, AISelection, AIKeyChange
-from foxworx.providers import ProviderManager
 from foxworx.model_gateway import ModelGateway
 
 @pytest.fixture

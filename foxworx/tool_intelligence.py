@@ -8,7 +8,6 @@ from __future__ import annotations
 import hashlib
 from html.parser import HTMLParser
 import json
-import os
 from pathlib import Path
 import re
 import sqlite3

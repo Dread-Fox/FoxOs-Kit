@@ -16,7 +16,7 @@ for count in (4000,20000,50000):
            'category':'System / additional','mode':'unknown','installed':True,
            'path':'/bin/true','version':'','package':'','note':''} for i in range(count)]
     rows[-1]={**rows[-1],'name':'late-dns-tool','description':'DNS records and resolver inspection','category':'DNS','mode':'cli'}
-    registry=SimpleNamespace(scanned=time.time(),list=lambda:rows)
+    registry=SimpleNamespace(scanned=time.time(),list=lambda:rows)  # noqa: B023  (used within this iteration)
     with tempfile.TemporaryDirectory() as state:
         discovery=ToolDiscovery(registry,state)
         start=time.perf_counter();discovery.rebuild();build_ms=(time.perf_counter()-start)*1000

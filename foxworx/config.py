@@ -135,8 +135,8 @@ class Settings:
             raise ValueError('Timeout or log-size limit is outside the supported range')
         if not Path(self.shell).is_file() or not os.access(self.shell, os.X_OK):
             raise ValueError('FOXWORX_SHELL must name an installed executable shell')
-        from .providers import ProviderManager, approved_endpoint_url, PROVIDERS
-        for name, item in self.ai_endpoints.items():
+        from .providers import approved_endpoint_url, PROVIDERS
+        for item in self.ai_endpoints.values():
             if not isinstance(item, dict) or item.get('provider') not in PROVIDERS or PROVIDERS[item['provider']]['cloud']:
                 raise ValueError('FOXWORX_AI_ENDPOINTS must specify supported self-hosted providers')
             approved_endpoint_url(item.get('url', ''))
@@ -193,7 +193,8 @@ class Settings:
             max_terminals=int(val('FOXWORX_MAX_TERMINALS', '4')),
             reserve_bytes=int(val('FOXWORX_RESERVE_MIB', '256')) * 1024 * 1024,
             extra_paths=tuple(x for x in val('FOXWORX_EXTRA_TOOL_PATHS').split(':') if x),
-            shell=val('FOXWORX_SHELL', '/bin/bash'), config_path=path,
+            # Bandit B604 false positive: dataclass field named shell, not subprocess shell=True.
+            shell=val('FOXWORX_SHELL', '/bin/bash'), config_path=path,  # nosec B604
             adapter_policy_path=Path(val('FOXWORX_ADAPTER_POLICY','/etc/foxworx/adapter-policy.json')),
             docs_online=val('FOXWORX_DOCS_ONLINE','false').lower() in ('true','1','yes'),
             docs_search_key=val('FOXWORX_DOCS_SEARCH_KEY'),

@@ -1,7 +1,6 @@
 """DreadFox can discuss coarse workbench pulse, never operational contents."""
 import json
 import pytest
-from datetime import datetime, timezone
 from fastapi.testclient import TestClient
 from foxworx.pet import DreadFoxPet
 from foxworx.pet_chat import DreadFoxConversation

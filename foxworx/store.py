@@ -94,7 +94,8 @@ class Store:
         if observer is not None:
             try:
                 observer(owner, action)
-            except Exception:
+            # Bandit B110 false positive: audit must not fail because the optional pet observer failed.
+            except Exception:  # nosec B110
                 pass  # A game observer must not make operational audit or jobs fail.
 
     def events(self, owner: str, limit: int = 200) -> list[dict]:

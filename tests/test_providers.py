@@ -1,5 +1,4 @@
 import pytest
-from cryptography.fernet import InvalidToken
 from fastapi import HTTPException
 from foxworx.providers import ProviderManager, normalize_model, approved_endpoint_url, owner_id
 from foxworx.models import AISelection, AIKeyChange

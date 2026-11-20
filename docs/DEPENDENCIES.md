@@ -35,4 +35,4 @@ For GPU workstations, `nvidia-smi` is an optional system diagnostic, not bundled
 
 These sources describe components and security considerations; they do not certify this application, authorize any engagement, or establish tool compatibility on your particular Pi. Use the vendors' current installation/policy pages when configuring your own accounts.
 
-- LiteLLM providers and SDK: https://docs.litellm.ai/docs/providers / https://docs.litellm.ai/docs/ . This project pins 1.104.0, but actual dependency resolution and provider requests **must** be verified from the Kali target before production use.
+- LiteLLM providers and SDK: https://docs.litellm.ai/docs/providers / https://docs.litellm.ai/docs/ . This project pins 1.110.1 (with `filelock` pinned to a patched release), but actual dependency resolution and provider requests **must** be verified from the Kali target before production use.

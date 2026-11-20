@@ -23,7 +23,7 @@ from .models import ToolNote, Login, Engagement, ProposalSpec, Approval, Session
 from .registry import Registry, ToolDiscovery
 from .models import RabbitMessage
 from .tool_intelligence import ToolIntelligence
-from .jobs import JobManager, ACTIVE, PROFILES
+from .jobs import JobManager, PROFILES
 from .terminal import TerminalManager
 from .ai import Copilot
 from .rabbit import RabbitRunner
@@ -191,7 +191,13 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         response.headers.update({'X-Content-Type-Options':'nosniff','X-Frame-Options':'DENY',
             'Referrer-Policy':'no-referrer','Cache-Control':'no-store',
             'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
-            'Permissions-Policy':'camera=(), microphone=(), geolocation=()'})
+            'Permissions-Policy':'camera=(), microphone=(), geolocation=()',
+            'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Resource-Policy':'same-origin'})
+        try:
+            if auth.secure_cookie(request):
+                response.headers['Strict-Transport-Security'] = 'max-age=31536000'
+        except HTTPException:
+            pass  # Unrecognised Host: already answered with 403 above.
         return response
 
     async def actor(request, mutate=False):

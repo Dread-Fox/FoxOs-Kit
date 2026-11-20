@@ -9,6 +9,7 @@ import subprocess
 import sys
 import time
 import httpx
+import websockets.exceptions
 import websockets.sync.client
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -27,7 +28,7 @@ def main():
         s.bind(('127.0.0.1',0)); port=s.getsockname()[1]
     with TemporaryDirectory(prefix='foxworx-v3-live-') as temp:
         path=Path(temp)/'config/settings.env'
-        initialize(path)
+        token=initialize(path)
         data=dict(dotenv_values(path,interpolate=False))
         data.update({'FOXWORX_PORT':str(port),'FOXWORX_ORIGIN':f'http://127.0.0.1:{port}',
                      'FOXWORX_STATE':str(Path(temp)/'data'),'FOXWORX_RESERVE_MIB':'0'})
@@ -47,9 +48,12 @@ def main():
                     if server.poll() is not None: raise AssertionError('Workbench service terminated: '+log.read_text()[-3000:])
                     time.sleep(.08)
                 else: raise AssertionError('Workbench did not accept localhost connections')
-                check(client.get('/api/auth-mode').json()['mode']=='open','Expected token-free service mode')
-                check(client.get('/api/session').status_code==200,'Token-free session was not immediately accessible')
-                check(not client.cookies,'Unexpected browser login cookie in open mode')
+                check(client.get('/api/auth-mode').json()['mode']=='local','Expected login-required local mode')
+                check(client.get('/api/session').status_code==401,'Anonymous session was not rejected')
+                check(client.get('/',follow_redirects=False).status_code==303,'Anonymous UI was not redirected to sign-in')
+                check(client.post('/api/login',json={'token':'wrong'*10},headers={'Origin':origin}).status_code==401,'Wrong token accepted')
+                login=client.post('/api/login',json={'token':token},headers={'Origin':origin})
+                check(login.status_code==200 and 'httponly' in login.headers['set-cookie'].lower(),'Setup-token sign-in failed')
                 session=client.get('/api/session').json()
                 client.headers.update({'Origin':origin,'X-Foxworx-CSRF':session['csrf']})
                 # v3.2 live read-only kernel hardware inventory and management protection.
@@ -104,8 +108,16 @@ def main():
                 termid=term.json()['id']
                 ticket=client.post(f'/api/terminals/{termid}/ticket',json={}).json()['ticket']
                 termoutput=b''
+                try:
+                    websockets.sync.client.connect(f'ws://127.0.0.1:{port}/ws/terminals/{termid}?ticket={ticket}',
+                                                   origin=origin,open_timeout=5).close()
+                    raise AssertionError('Terminal WebSocket accepted a ticket without a session')
+                except websockets.exceptions.InvalidStatus:
+                    pass
+                ticket=client.post(f'/api/terminals/{termid}/ticket',json={}).json()['ticket']
+                cookie={'Cookie':'foxworx_session='+client.cookies['foxworx_session']}
                 with websockets.sync.client.connect(f'ws://127.0.0.1:{port}/ws/terminals/{termid}?ticket={ticket}',
-                        origin=origin,open_timeout=5,close_timeout=2) as ws:
+                        origin=origin,additional_headers=cookie,open_timeout=5,close_timeout=2) as ws:
                     ws.send(json.dumps({'type':'input','data':'echo FOXWORX_LIVE_NODE_OK\n'}))
                     for _ in range(25):
                         message=json.loads(ws.recv(timeout=3))
@@ -164,7 +176,7 @@ def main():
                 check(not client.get('/api/pet').json()['hatched'],'Pet data remained after erase')
                 report={'status':'PASS','scope':'live non-root localhost HTTP/PTY/jobs, mocked-free; no external inference, cloudflare or targets',
                         'uid':os.geteuid(),'version':session['version'],
-                        'checks':['token-free session without login cookie','browser Origin/CSRF request integrity','read-only kernel hardware inventory and management role protection',
+                        'checks':['login required; setup-token sign-in with HttpOnly session cookie','browser Origin/CSRF request integrity','read-only kernel hardware inventory and management role protection',
                                   'selected Ollama endpoint reflected in API','actual installed tool knowledge read and versioned operator note saved',
                                   'online research disabled without administrator opt-in','real PTY websocket command output',
                                   'terminal survives WebSocket disconnect','explicit single-use proposal approval',

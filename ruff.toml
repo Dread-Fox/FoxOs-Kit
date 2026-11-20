@@ -1,0 +1,17 @@
+# Lint configuration used locally and in CI (.github/workflows/ci.yml).
+# Correctness-focused: pyflakes, pycodestyle errors, bugbear. Formatting is
+# intentionally not enforced to avoid churning compact existing code.
+target-version = "py311"
+line-length = 160
+extend-exclude = [".venv"]
+
+[lint]
+select = ["E4", "E7", "E9", "F", "B"]
+ignore = [
+  "E701", "E702", "E731",  # Existing compact one-line style.
+  "B008",                  # FastAPI dependency-style defaults.
+  "B904",                  # `raise ... from` is used where it matters; not enforced everywhere yet.
+]
+
+[lint.per-file-ignores]
+"tests/*" = ["B017", "B011", "E402", "F811"]  # pytest.raises(Exception) / fixture re-imports are intentional.

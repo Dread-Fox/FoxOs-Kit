@@ -133,14 +133,41 @@ def _strip_endpoint(piece: str) -> tuple[str, int | None]:
     return piece, None
 
 
+_NUMERIC_HOST = re.compile(r'(?:0x[0-9a-f]+|[0-9]+)(?:\.(?:0x[0-9a-f]+|[0-9]+)){0,3}', re.I)
+
+
+def _non_canonical_number(host: str, port: int | None) -> bool:
+    """Detect IPv4 spellings that resolvers accept but scope rules would not match.
+
+    ``2130706433``, ``0x7f000001``, ``127.1`` and ``0177.0.0.1`` all mean
+    127.0.0.1 to curl/glibc. Plain small integers (ports, counts) and decimals
+    such as ``0.5`` without a port are left alone to avoid false positives.
+    """
+    if not _NUMERIC_HOST.fullmatch(host):
+        return False
+    try:
+        ipaddress.IPv4Address(host)
+        return False  # canonical dotted quad
+    except ValueError:
+        pass
+    if host.lower().startswith('0x') or '.0x' in host.lower():
+        return True
+    if '.' not in host:
+        return int(host) > 0xFFFFFF  # large integers are almost certainly encoded addresses
+    return port is not None or host.count('.') == 3  # "127.1:8765" / "0177.0.0.1"
+
+
 def _is_loopback(host: str) -> bool:
     host = host.lower().rstrip('.')
     if host in ('localhost', 'localhost.localdomain', 'ip6-localhost'):
         return True
     try:
-        return ipaddress.ip_address(host).is_loopback
+        address = ipaddress.ip_address(host)
     except ValueError:
         return False
+    mapped = getattr(address, 'ipv4_mapped', None)
+    # 0.0.0.0 / :: reach local listeners on Linux.
+    return address.is_loopback or address.is_unspecified or bool(mapped and mapped.is_loopback)
 
 
 def _network_in_scope(network: ipaddress._BaseNetwork, includes: list[str], excludes: list[str]) -> bool:
@@ -211,11 +238,19 @@ def _destination_problems(piece: str, includes, excludes, workbench_port) -> lis
         try:
             network = ipaddress.ip_network(piece, strict=False)
         except ValueError:
+            # Scheme-less "host[:port]/path" (curl, wget and others accept it):
+            # check the authority part like any other endpoint.
+            piece = piece.split('/', 1)[0]
+            if not piece:
+                return []
+        else:
+            if not _network_in_scope(network, includes, excludes):
+                return [f'network {network} is not entirely inside the engagement scope']
             return []
-        if not _network_in_scope(network, includes, excludes):
-            return [f'network {network} is not entirely inside the engagement scope']
-        return []
     host, port = _strip_endpoint(piece)
+    if _non_canonical_number(host, port):
+        return [f'non-canonical numeric address {host!r} (decimal, hex, octal or shortened IPv4) is not permitted; '
+                'use the dotted-quad form of an in-scope address']
     if _is_loopback(host) and workbench_port and port == workbench_port:
         return ['the workbench listener itself is never a permitted target']
     if _IPV4_RANGE.fullmatch(host) and ('-' in host or '*' in host):

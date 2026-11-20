@@ -152,7 +152,8 @@ class Auth:
         except HTTPException:
             return False
 
-    def login(self, client: str, token: str = '', username: str = '', password: str = '',
+    # Bandit B107 false positive: empty defaults, not credentials.
+    def login(self, client: str, token: str = '', username: str = '', password: str = '',  # nosec B107
               remember: bool = False) -> tuple[str, str, int]:
         """Verify credentials; return ``(actor, session_cookie, max_age)``."""
         if not self.login_enabled or self.accounts is None:

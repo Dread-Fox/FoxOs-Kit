@@ -8,7 +8,6 @@ import json
 import logging
 import re
 import time
-from datetime import datetime, timezone
 
 import httpx
 from fastapi import HTTPException

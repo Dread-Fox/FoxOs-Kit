@@ -27,3 +27,7 @@ evidence/
 backups/
 .tmp/
 .DS_Store
+# FOXWORX private configuration and backups (normally under ~/.config, never in the repo)
+settings.env
+settings.env.*
+*.before-v*

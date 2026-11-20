@@ -25,6 +25,19 @@ python3 -m venv .venv
 PYTHON="$PWD/.venv/bin/python" bash scripts/test.sh
 ```
 
+### Continuous integration and static analysis
+
+`.github/workflows/ci.yml` runs on every push and pull request: `scripts/test.sh` (pytest, compile check, shell syntax, JS syntax) on Python 3.11 and 3.13, plus Ruff (`ruff.toml`), Bandit (`bandit.yaml`; every skip and `# nosec` has a written reason) and pip-audit against all three requirements files. Run the same checks locally:
+
+```bash
+.venv/bin/pip install ruff==0.17.6 bandit==1.9.4 pip-audit==2.10.1
+.venv/bin/ruff check foxworx tests
+.venv/bin/bandit -q -r foxworx -c bandit.yaml
+.venv/bin/pip-audit -r requirements.txt -r requirements-ai.txt -r requirements-dev.txt
+```
+
+New API routes are authenticated and CSRF-checked by the middleware in `app.py` automatically; `tests/test_auth.py::test_every_api_route_rejects_unauthenticated_requests` enumerates all routes and fails if one is reachable anonymously. Only add a path to `public_api` with a security review.
+
 `tests/browser_smoke.py` is an optional **offline fixture** test requiring Playwright and a system Chromium at `/usr/bin/chromium`. It runs the actual HTML/CSS/JS and terminal renderer with simulated responses, not a live socket, API provider or Cloudflare service. Never copy those fixtures into production routes.
 
 The server factory has an explicit `_allow_root_for_tests` argument so a root-based build container can execute tests. The CLI never exposes that flag and rejects root. Tests stub the completion adapter for provider routing and use locally generated RSA keys for Cloudflare JWT verification. No tests perform public target scanning or consume paid AI credits.

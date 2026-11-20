@@ -151,7 +151,8 @@ class DreadFoxPet:
         self.queue = None
 
     async def _run(self):
-        assert self.queue is not None
+        if self.queue is None:
+            raise RuntimeError('DreadFox observer queue was not initialised')
         while True:
             owner, kind, when, generation = await self.queue.get()
             try:

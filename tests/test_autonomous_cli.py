@@ -5,7 +5,6 @@ import time
 from types import SimpleNamespace
 
 import pytest
-from fastapi import HTTPException
 from pydantic import ValidationError
 from foxworx.adapters import AdapterPolicy, parse_document
 from foxworx.jobs import JobManager

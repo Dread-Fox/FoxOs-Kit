@@ -99,4 +99,4 @@ class Registry:
         return {'realpath':str(p.resolve()), 'inode':s.st_ino, 'size':s.st_size, 'mtime_ns':s.st_mtime_ns}
 
 # Public discovery facade; implementation has no dependency on Registry.
-from .tool_discovery import ToolDiscovery
+from .tool_discovery import ToolDiscovery  # noqa: E402,F401  (re-exported public API)
