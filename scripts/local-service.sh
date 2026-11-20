@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Force the existing deployment to the local-only 127.0.0.1:8765 profile.
+# Point the existing deployment at the loopback 127.0.0.1:8765 listener.
+# Login stays required; this never enables open (no-login) mode.
 # Does not restart an active service automatically.
 set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"

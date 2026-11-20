@@ -56,11 +56,11 @@ async function boot(){
       return;
     }
     try{S.session=await api('/api/session');}catch(e){
-      if(e.status===401 && ['local','proxy'].includes(mode.mode)){$('login-form').hidden=false;$('login-loading').hidden=true;$('setup-token').focus();return;}
+      if(e.status===401 && mode.login){$('login-form').hidden=false;$('login-loading').hidden=true;$('login-user').focus();return;}
       throw e;
     }
     S.csrf=S.session.csrf;$('login-screen').hidden=true;$('workbench').hidden=false;
-    $('node-name').textContent=S.session.host;$('auth-badge').textContent=S.session.mode==='open'?'Token-free':(S.session.mode==='cloudflare'?'Access verified':(S.session.public_origin?'Local + HTTPS':'Local setup'));
+    $('node-name').textContent=S.session.host;$('auth-badge').textContent=S.session.mode==='open'?'No login (local only)':(S.session.mode==='cloudflare'?'Access verified':(S.session.public_origin?'Local + HTTPS':'Local setup'));
     $('operator-label').textContent=S.session.actor;
     $('ai-badge').textContent='Loading…';$('send-chat').disabled=true;
     await refreshAISettings();
@@ -73,7 +73,11 @@ async function boot(){
     await petUI.refreshChat({quiet:true});
   }catch(e){$('login-loading').hidden=true;$('login-error').textContent=e.message;if(!$('workbench').hidden)toast('Initialization incomplete: '+e.message+' Reload after checking the node.');}
 }
-$('login-form').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;$('login-error').textContent='';try{await api('/api/login','POST',{token:$('setup-token').value,remember:$('remember-browser').checked});$('setup-token').value='';await boot();}catch(e){$('login-error').textContent=e.message;}finally{b.disabled=false;}};
+$('login-form').onsubmit=async e=>{e.preventDefault();const b=e.submitter;b.disabled=true;$('login-error').textContent='';
+  const user=$('login-user').value.trim(), secret=$('setup-token').value;
+  const body=user?{username:user,password:secret,remember:$('remember-browser').checked}:{token:secret,remember:$('remember-browser').checked};
+  try{await api('/api/login','POST',body);$('setup-token').value='';if(location.pathname!=='/'){location.replace('/');return;}await boot();}
+  catch(e){$('login-error').textContent=e.message;}finally{b.disabled=false;}};
 
 function renderEngagementOptions(){const select=$('engagement-select');select.replaceChildren(...S.engagements.map(x=>option(x.id,x.name)));if(S.eng)select.value=S.eng;}
 async function selectEngagement(id){

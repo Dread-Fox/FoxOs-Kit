@@ -10,14 +10,14 @@ def cli_module():
 
 def test_init_config_safe_and_idempotent(tmp_path):
     cli=cli_module(); path=tmp_path/'config/settings.env'
-    assert cli.initialize(path) is True
+    assert cli.initialize(path) is not None
     raw=path.read_text(); assert len(raw)>100
     assert stat.S_IMODE(path.stat().st_mode)==0o600
-    assert cli.initialize(path) is False
+    assert cli.initialize(path) is None
     assert path.read_text()==raw
     from foxworx.config import Settings
     cfg=Settings.load(path)
-    assert cfg.local_token=='' and cfg.mode=='open'
+    assert cfg.local_token=='' and cfg.mode=='local' and cfg.has_token_hash
 
 def test_config_write_rejects_symlinks(tmp_path):
     cli=cli_module(); target=tmp_path/'target'; target.write_text('unchanged')
@@ -28,7 +28,7 @@ def test_config_write_rejects_symlinks(tmp_path):
 def test_cli_version_no_secrets(capsys):
     cli=cli_module()
     assert cli.main(['version'])==0
-    assert capsys.readouterr().out.strip()=='3.3.3'
+    assert capsys.readouterr().out.strip()=='3.4.0'
 
 def test_vendor_hashes_are_complete():
     cli=cli_module()
@@ -40,19 +40,19 @@ def test_vendor_hashes_are_complete():
 
 def test_init_workstation_profile(tmp_path):
     cli=cli_module(); cfgfile=tmp_path/'settings.env'
-    assert cli.initialize(cfgfile, profile='workstation') is True
+    assert cli.initialize(cfgfile, profile='workstation') is not None
     from dotenv import dotenv_values
     values=dotenv_values(cfgfile, interpolate=False)
     assert values['FOXWORX_MAX_JOBS']=='4'
     assert values['FOXWORX_MAX_TERMINALS']=='8'
     assert values['FOXWORX_RESERVE_MIB']=='1024'
-    assert cli.initialize(cfgfile,profile='pi') is False
+    assert cli.initialize(cfgfile,profile='pi') is None
     assert dotenv_values(cfgfile, interpolate=False)==values
 
 
 def test_init_pi_profile(tmp_path):
     cli=cli_module(); cfgfile=tmp_path/'settings.env'
-    assert cli.initialize(cfgfile, profile='pi') is True
+    assert cli.initialize(cfgfile, profile='pi') is not None
     from dotenv import dotenv_values
     values=dotenv_values(cfgfile, interpolate=False)
     assert values['FOXWORX_MAX_JOBS']=='2'

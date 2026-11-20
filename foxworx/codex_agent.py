@@ -16,6 +16,7 @@ import re
 import shutil
 from uuid import uuid4
 from fastapi import HTTPException
+from . import __version__
 from .config import child_environment
 from .store import now
 
@@ -43,7 +44,7 @@ class CodexProcess:
         self.reader=asyncio.create_task(self._read())
         try:
             await self.call('initialize',{'clientInfo':{'name':'foxworx_dreadfoxhacker',
-                    'title':'FOXWORX DreadFoxHacker','version':'3.3.3'},'capabilities':{}},timeout=15)
+                    'title':'FOXWORX DreadFoxHacker','version':__version__},'capabilities':{}},timeout=15)
             await self.notify('initialized')
         except BaseException:
             await self.stop()

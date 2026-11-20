@@ -1,4 +1,4 @@
-# FOXWORX Kali Workbench · v3.3.3
+# FOXWORX Kali Workbench · v3.4.0
 
 FOXWORX DreadFoxHacker is a browser-based workbench for **authorized FoxWorx operators**. It brings a Linux terminal, local tool discovery, managed jobs, evidence, and optional AI assistance into one workspace for authorized security assessments and lab work.
 
@@ -6,7 +6,7 @@ Run the service on a compatible Linux machine and open it locally or through an 
 
 **License:** © 2026 FoxWorx LLC. This is proprietary software. Employees and contractors may use it within their express FoxWorx LLC authorization; other use requires permission under the [LICENSE](LICENSE). A public GitHub repository does not grant a public license. Third-party components retain their own licenses.
 
-> **Access model:** The default installation listens on `http://127.0.0.1:8765` with no application login. Anyone who can reach the service can use its terminal and access its data as the service's Linux account. Use a trusted local environment and control access to any remote route. See [local service and remote access](docs/LOCAL-SERVICE.md).
+> **Access model:** The service listens only on `http://127.0.0.1:8765` and **requires sign-in** for the web UI, the API and every terminal WebSocket. The installer prints a one-time setup token; named operator accounts get their own passwords, sessions and audit trail. A no-login mode exists only as an explicit, loopback-only opt-in. See [local service and remote access](docs/LOCAL-SERVICE.md) and the [security model](#security-model).
 
 ## Supported platforms
 
@@ -77,11 +77,17 @@ Useful installation options:
 | `--skip-apt` | Skip OS package installation when the required dependencies are already available. |
 | `--no-start` | Prepare the installation without starting the service. |
 
-**Upgrades:** Save needed evidence and finish active work before stopping an existing service with `systemctl --user stop foxworx-workbench`. Stopping interrupts live terminals and jobs. The installer refuses to replace a running workbench and preserves existing state and credentials, but this release backs up and migrates authentication mode, port, and origin to the default token-free local configuration. Review the [installation and upgrade guide](docs/INSTALL.md) before updating an existing deployment, especially one using authenticated access.
+**Upgrades:** Save needed evidence and finish active work before stopping an existing service with `systemctl --user stop foxworx-workbench`. Stopping interrupts live terminals and jobs. The installer refuses to replace a running workbench. It **preserves existing authentication settings** (`local`, `proxy` and `cloudflare` modes, port, origins and tokens) along with state and credentials. A v3.3.x deployment still on the old no-login default is moved to login-required mode, its previous file is backed up, and a new setup token is printed once. See the [installation and upgrade guide](docs/INSTALL.md).
 
 ### 3. Open the workbench
 
-Open **http://127.0.0.1:8765** in a browser on the host. The default installation has no setup token or application sign-in screen. Signing in to an optional AI provider is a separate operation.
+Open **http://127.0.0.1:8765** in a browser on the host. For the first sign-in, leave the operator name empty and paste the **setup token** the installer printed. Then give each person a named account:
+
+```bash
+bash scripts/operator.sh add alice     # prompts for a password
+```
+
+Lost the token? `bash scripts/configure.sh --rotate-token` issues a new one and revokes existing sessions. Signing in to an optional AI provider is a separate operation.
 
 Check service status or logs when needed:
 
@@ -139,9 +145,9 @@ ssh -N -L 127.0.0.1:8765:127.0.0.1:8765 operator@HOST_ADDRESS
 
 Replace `operator` and `HOST_ADDRESS` with the host's SSH account and address, keep the connection open, and browse to `http://127.0.0.1:8765` on the client. The client port must be available.
 
-A separately managed HTTPS reverse proxy or tunnel can also forward to `http://127.0.0.1:8765` with WebSocket support. Cloudflare is optional. The application does not create a tunnel, register a domain, or enforce visitor identity in default open mode. HTTPS alone does not restrict who can operate the workbench; configure access controls on the remote route before making it reachable outside the trusted operator environment.
+A separately managed HTTPS reverse proxy or tunnel (Cloudflare is optional) can forward to `http://127.0.0.1:8765` with WebSocket support after you register its exact hostname with `bash scripts/configure.sh --public-origin https://host.example`. Sign-in stays enforced through the tunnel, and cookies are marked `Secure` over HTTPS. An upstream access policy with MFA is still recommended as a second layer.
 
-**Operators sharing an instance share authority.** In default open mode, visitors use one shared local operator identity and the same Linux service account. They can access that account's files, configuration, evidence, and connected integrations. Credential encryption does not isolate operators who share its shell access. Use separate service accounts or hosts where separate trust boundaries are required.
+**Operators sharing an instance share OS authority.** Named accounts separate records, sessions and audit attribution inside the app, but every operator's terminal runs as the same Linux service account and can read that account's files, configuration and database. Use separate service accounts or hosts where separate trust boundaries are required.
 
 Install each host independently, with its own service, configuration, and data. Discord can provide optional team context, but FOXWORX does not provide centralized fleet management or automatic evidence synchronization. See [local and remote access](docs/LOCAL-SERVICE.md) and [security boundaries](docs/SECURITY.md).
 

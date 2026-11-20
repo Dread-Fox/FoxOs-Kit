@@ -1,8 +1,7 @@
-"""v3.3.3: one protected app, independent localhost and HTTPS tunnel origins."""
+"""v3.3.3+: one protected app, independent localhost and HTTPS tunnel origins."""
 from dataclasses import replace
 from pathlib import Path
 import time
-import jwt
 import pytest
 from dotenv import dotenv_values
 from fastapi.testclient import TestClient
@@ -36,7 +35,7 @@ def test_two_origins_host_restriction_and_forwarded_headers(cfg):
             assert r.status_code==200
             assert ('secure' in r.headers['set-cookie'].lower()) is cloud
             assert 'httponly' in r.headers['set-cookie'].lower()
-            assert 'samesite=lax' in r.headers['set-cookie'].lower()
+            assert 'samesite=strict' in r.headers['set-cookie'].lower()
             assert c.get('/api/session',headers=hdr).status_code==200
             csrf=c.get('/api/session',headers=hdr).json()['csrf']
             # A valid cookie and CSRF do not authorize a cross-origin mutation.
@@ -54,14 +53,18 @@ def test_https_host_is_never_automatically_trusted(cfg):
             replace(cfg,public_origin=bad).validate()
 
 
-def test_remember_checkbox_keeps_signed_session_without_requiring_token_each_visit(cfg):
+def test_remember_checkbox_keeps_server_side_session_for_seven_days(cfg):
     with TestClient(create_app(cfg,_allow_root_for_tests=True),base_url=cfg.origin,client=('127.0.0.1',50000)) as c:
         now=time.time()
         response=c.post('/api/login',json={'token':cfg.local_token,'remember':True},headers={'Origin':cfg.origin})
         assert response.status_code==200
-        assert 'max-age=2592000' in response.headers['set-cookie'].lower()
-        decoded=jwt.decode(c.cookies['foxworx_local'],cfg.secret,algorithms=['HS256'],audience='foxworx-local')
-        assert now+29*86400 <= decoded['exp'] <= now+31*86400
+        assert 'max-age=604800' in response.headers['set-cookie'].lower()
+        expires=c.get('/api/session').json()['session_expires']
+        assert now+6*86400 <= expires <= now+8*86400
+        cookie=c.cookies['foxworx_session']
+    # Sessions are stored server-side, so they survive an app restart.
+    with TestClient(create_app(cfg,_allow_root_for_tests=True),base_url=cfg.origin,client=('127.0.0.1',50000)) as c:
+        c.cookies.set('foxworx_session',cookie)
         assert c.get('/api/session').status_code==200
     with TestClient(create_app(cfg,_allow_root_for_tests=True),base_url=cfg.origin,client=('127.0.0.1',50000)) as c:
         response=c.post('/api/login',json={'token':cfg.local_token},headers={'Origin':cfg.origin})
@@ -77,12 +80,12 @@ def test_cli_public_origin_round_trip_preserves_secrets(tmp_path,monkeypatch,cap
     assert main(['configure','--config',str(path),'--public-origin',PUBLIC])==0
     after=dict(dotenv_values(path,interpolate=False))
     assert after['FOXWORX_PUBLIC_ORIGIN']==PUBLIC
-    assert after['FOXWORX_LOCAL_TOKEN']==initial['FOXWORX_LOCAL_TOKEN']
+    assert after['FOXWORX_LOCAL_TOKEN_HASH']==initial['FOXWORX_LOCAL_TOKEN_HASH']
     assert after['FOXWORX_SESSION_SECRET']==initial['FOXWORX_SESSION_SECRET']
-    assert after['FOXWORX_AUTH_MODE']=='open'
+    assert after['FOXWORX_AUTH_MODE']=='local'
     assert after['FOXWORX_ORIGIN']=='http://127.0.0.1:8765'
     assert Settings.load(path).public_origin==PUBLIC
-    assert (path.parent/'settings.env.before-v3.3.3').is_file()
+    assert (path.parent/'settings.env.before-v3.4.0').is_file()
     assert main(['configure','--config',str(path),'--clear-public-origin'])==0
     assert Settings.load(path).public_origin==''
     assert main(['configure','--config',str(path),'--public-origin','http://bad.example'])==1

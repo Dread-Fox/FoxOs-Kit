@@ -1,68 +1,110 @@
-# FOXWORX v3.3.3 — token-free local service and optional self-managed tunnel
+# FOXWORX v3.4.0 — authenticated local service and remote access
 
-This is the default behavior in v3.3.3. **There is no FOXWORX setup-token screen, password, Cloudflare JWT configuration, approved-hostname registration, or application-level login.** The app listens on `127.0.0.1:8765` as a **non-root systemd user service**. Anyone whose browser can reach the application can interact with its terminal and managed tools as the service's Linux account. **That includes people who can access any tunnel hostname you publish.** Protect your external route with access control if that matters to your deployment; FOXWORX does not require or configure it.
+FOXWORX runs as a **non-root systemd user service** listening on `127.0.0.1:8765`. Since v3.4.0, **sign-in is required by default** for the web UI, every API route, and every terminal WebSocket. The terminal is a real shell running as the service's Linux account, so the login is what stands between a browser and that account.
 
-## Kali ARM64 Pi or x86-64 desktop — install
-
-Download `FoxWorx-DreadFoxHacker-v3.3.3.tar.gz` on the target machine. Then:
+## Install or upgrade
 
 ```bash
-cd ~
-tar -xzf ~/Downloads/FoxWorx-DreadFoxHacker-v3.3.3.tar.gz
-cd ~/FoxWorx-DreadFoxHacker-v3.3.3
+cd ~/FoxWorx-DreadFoxHacker
+git pull                       # or extract a new release into its own directory
+systemctl --user stop foxworx-workbench 2>/dev/null || true   # finish work first
 bash scripts/install.sh --preflight
-# If upgrading, finish work and stop the older user service yourself first:
-systemctl --user stop foxworx-workbench 2>/dev/null || true
 bash scripts/install.sh
 bash scripts/doctor.sh
 ```
 
-The installer keeps your existing state at `~/.local/share/foxworx-workbench-v2/`, plus provider and Discord settings at `~/.config/foxworx-workbench/settings.env`. It migrates only `FOXWORX_AUTH_MODE=open`, `FOXWORX_PORT=8765`, and `FOXWORX_ORIGIN=http://127.0.0.1:8765`, backing up an existing configuration as `settings.env.before-v3.3.3` (mode 600) on first change. An old stored local token, if present, is left unchanged but **never requested or checked** in open mode. A fresh installation does not generate a setup token. Session/encryption secrets used by other subsystems remain private and must not be deleted.
+What the installer does with your configuration (`~/.config/foxworx-workbench/settings.env`, mode 600):
 
-Open **http://127.0.0.1:8765** in the machine's browser. It opens the full workbench directly.
+| Existing configuration | Result |
+|---|---|
+| None (fresh install) | Creates `FOXWORX_AUTH_MODE=local` and generates a **setup token**, printed **once**. Only its SHA-256 hash is stored. |
+| `local`, `proxy` or `cloudflare` | **Preserved exactly**: mode, port, origins, public origin, tokens and secrets are not touched. |
+| `open` set by v3.3.x (no acknowledgement) | Moved to `local` (login required) and a new setup token is printed once. The previous file is kept as `settings.env.before-v3.4.0` (mode 600). Your public origin, provider keys, Discord settings and state are preserved. |
+| `open` with `FOXWORX_OPEN_MODE_ACK=I_UNDERSTAND_NO_LOGIN` | Preserved (you opted in explicitly; see below). |
+
+State in `~/.local/share/foxworx-workbench-v2/` is always preserved.
+
+## Signing in
+
+1. Open **http://127.0.0.1:8765**. You are redirected to the sign-in page.
+2. First sign-in: leave **Operator name** empty and paste the setup token the installer printed. This signs you in as the built-in `local-operator` identity, which owns all records created by earlier versions.
+3. Create a named account for each person:
+
+   ```bash
+   bash scripts/operator.sh add alice      # prompts for a password (12+ characters)
+   bash scripts/operator.sh list
+   bash scripts/operator.sh passwd alice   # also revokes alice's sessions
+   bash scripts/operator.sh logout alice   # revoke all of alice's sessions
+   bash scripts/operator.sh remove alice   # delete the account and revoke its sessions
+   ```
+
+   Each operator then signs in with their name and password. Their engagements, jobs, chat, provider keys and audit history are a separate namespace inside the app, and audit records are attributed to them.
+
+**Lost or leaked setup token:** `bash scripts/configure.sh --rotate-token` prints a new token, rotates the session secret, and revokes every existing browser session. Restart the service afterwards.
+
+### Session behaviour
+
+- Sessions are stored server-side (only a SHA-256 digest of the cookie is kept). Signing out, changing a password, removing an operator or rotating the token revokes them immediately.
+- Lifetime: 8 hours, or 7 days with **Remember this browser**. Expiry is enforced on the server.
+- Cookie: `foxworx_session`, `HttpOnly`, `SameSite=Strict`, and `Secure` whenever the browser reaches the app over HTTPS (public origin or `proxy` mode).
+- State-changing requests need an exact same-origin `Origin` header and a CSRF token bound to the session.
+- Terminal WebSockets need a valid session, an exact `Origin`, and a 30-second single-use ticket bound to that operator and terminal.
+- Failed sign-ins are rate limited: 8 failures per client address or operator name in 15 minutes, and 60 in total. Failures are written to the service log and the `system:auth` audit stream. Passwords and tokens are never logged.
+
+## Remote access
+
+The listener only binds a loopback address and only accepts loopback peers. Remote browsers reach it through one of these paths, and **sign-in remains enforced on all of them**.
+
+**SSH port forward (simplest):**
+
+```bash
+ssh -N -L 127.0.0.1:8765:127.0.0.1:8765 operator@HOST_ADDRESS
+```
+
+**HTTPS tunnel or reverse proxy (for example Cloudflare Tunnel):** register the exact public hostname so the app accepts its `Host` header and issues `Secure` cookies:
+
+```bash
+bash scripts/configure.sh --public-origin https://workbench.example.com
+systemctl --user restart foxworx-workbench
+```
+
+Point the tunnel at `http://127.0.0.1:8765`, keep WebSocket support enabled, and preserve the public `Host` header. Requests carrying tunnel headers under the plain localhost hostname are rejected. Adding Cloudflare Access/MFA in front is still a good idea (defence in depth), but it is no longer the only control.
+
+**Binding a LAN address is not supported.** `FOXWORX_BIND_HOST` must be a loopback address in every mode. Use SSH or an HTTPS proxy instead, so that credentials and session cookies are never sent over plain HTTP on a network.
+
+## Open (no-login) mode — explicit opt-in only
+
+For a single-user lab VM where nobody else has a login or network path to the host, you can turn sign-in off:
+
+```bash
+bash scripts/configure.sh --insecure-open-mode   # sets FOXWORX_OPEN_MODE_ACK=I_UNDERSTAND_NO_LOGIN
+systemctl --user restart foxworx-workbench
+```
+
+Open mode is constrained so it cannot be exposed by accident:
+
+- The service **refuses to start** in open mode unless `FOXWORX_OPEN_MODE_ACK=I_UNDERSTAND_NO_LOGIN` is set, and refuses to bind any non-loopback address.
+- It cannot be combined with `FOXWORX_PUBLIC_ORIGIN`.
+- Requests that carry tunnel or proxy headers (`CF-Ray`, `CF-Connecting-IP`, `X-Forwarded-*`, `Forwarded`, `X-Real-IP`) are rejected with 403.
+- The `Host` header must be `127.0.0.1:<port>`, `localhost:<port>` or `[::1]:<port>`, which blocks DNS-rebinding attacks from web pages.
+- **What it does not protect against:** any local user or process on the same machine that can connect to 127.0.0.1 can operate the service account. Do not use open mode on shared hosts.
+
+Return to login with `bash scripts/configure.sh --require-login`.
+
+## `scripts/local-service.sh`
+
+Points the deployment at `http://127.0.0.1:8765` (port, origin and bind address). It keeps login on: a `proxy` or `cloudflare` deployment becomes `local` login mode, and an unacknowledged `open` deployment becomes `local` with a new setup token. It only keeps open mode if you previously opted in explicitly.
+
+## Troubleshooting
 
 ```bash
 systemctl --user status foxworx-workbench --no-pager
 journalctl --user -u foxworx-workbench -n 80 --no-pager
-systemctl --user restart foxworx-workbench
-```
-
-The service is enabled for the signed-in user; an administrator can optionally enable it before user login with `sudo loginctl enable-linger "$USER"`. The installer does not run as root or modify your other running services. Codex account sign-in (to OpenAI) and Discord bot setup remain separate optional integrations.
-
-## Your own Cloudflare Tunnel, when wanted
-
-FOXWORX does not install `cloudflared`, create a Cloudflare application, register DNS, require Cloudflare Access, or require a hostname allowlist. In your tunnel configuration, publish your chosen hostname (for example `foxworxhacker1.dreadfoxtrader.com`) with origin service URL:
-
-`http://127.0.0.1:8765`
-
-Use Cloudflare Tunnel's usual HTTP forwarding and WebSocket handling. Browse the public hostname as `https://foxworxhacker1.dreadfoxtrader.com` (or your own hostname). You should reach the same workbench directly, without a FOXWORX token or hostname error. No `--public-origin` command or FOXWORX restart is needed merely to add a tunnel.
-
-**Exposure warning:** Neither a tunnel nor HTTPS alone proves the visitor's identity. With token-free mode, someone who can access that hostname can potentially read files, run commands, view engagement data, edit provider settings and use connected integrations with the privileges of the FOXWORX user. You may set up Cloudflare Access/MFA independently; these are **optional user-managed controls**, not an application startup requirement. Keep the service bound to localhost unless you deliberately need LAN access.
-
-## How the browser works without a login
-
-- `GET /api/session` returns the shared local operator session immediately; no cookie is needed.
-- The browser still sends an Origin and a lightweight CSRF header on state-changing requests; this is not a login requirement. The backend accepts a valid browser Origin regardless of your tunnel's public hostname, including when the proxy rewrites Host internally.
-- WebSocket PTYs still use short-lived connection tickets generated by the application, not passwords; this prevents accidental cross-site terminal connections.
-- All visitors share one `local-operator` workspace owner because there is no user identity boundary. Earlier Cloudflare identity-owned records are not automatically reassigned to that owner.
-- The old `local`, `proxy`, and `cloudflare` modes can still be selected manually for legacy installations; the v3.3.3 installer intentionally resets the service to `open` when you install this local-service edition.
-
-## Diagnose a failure
-
-If localhost loads but a tunnel hostname does not, check your tunnel's service URL, ingress route, proxy response status and running systemd service. Restart only after changing the service itself. A JSON `Unexpected hostname` response indicates you are still running an older release or configured legacy mode; check:
-
-```bash
-systemctl --user status foxworx-workbench
 curl -fsS http://127.0.0.1:8765/api/auth-mode
-# Expected: {"mode":"open", ...}
+# {"mode":"local","version":"3.4.0","public_origin":"","login":true}
 ```
 
-To restore this release's intended mode if an older config is active:
-
-```bash
-cd ~/FoxWorx-DreadFoxHacker-v3.3.3
-bash scripts/local-service.sh
-systemctl --user restart foxworx-workbench
-```
-
-The app never deploys tools, drivers or network settings automatically. Its tool authorization, fixed argument templates, scope checks, and root-owned Rabbit Hole policy are separate from browser authentication.
+- **`Unexpected hostname`:** the browser or tunnel used a hostname that is not configured. Use `127.0.0.1:8765`, or run `--public-origin` for your tunnel hostname.
+- **`Tunnel must preserve its configured public Host header`:** the tunnel rewrote `Host` to localhost. Configure it to pass the public hostname through.
+- **`Too many failed sign-in attempts`:** wait 15 minutes, or restart the service if you are the administrator.
+- **Service fails to start after editing settings:** `bash scripts/doctor.sh` prints the validation error, for example an open-mode bind or a missing setup token.

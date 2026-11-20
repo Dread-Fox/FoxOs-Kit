@@ -12,11 +12,12 @@ import shlex
 import time
 from urllib.parse import quote, unquote
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from . import __version__
 from .config import Settings, ROOT
-from .auth import Auth
+from .auth import Auth, SESSION_COOKIE
+from .accounts import Accounts
 from .store import Store
 from .models import ToolNote, Login, Engagement, ProposalSpec, Approval, SessionSpec, ChatSpec, ArgumentText, AISelection, AIKeyChange, PetName, PetCare, PetTracking, PetChatMessage, PetChatMode, PetChatFocus, PetContextToggle, RabbitSpec, RegisteredProposalSpec
 from .registry import Registry, ToolDiscovery
@@ -64,7 +65,8 @@ def diagnostics(cfg, registry, jobs, terminals):
                       'detached_terminal_seconds':3600, 'terminal_replay_bytes':262144},
             'warnings':['Trusted operators share this Linux account. Web ownership is not OS isolation.',
                         'The terminal and advanced jobs are not constrained by engagement input checks.',
-                        'Token-free mode grants any visitor reachable through your tunnel the Linux service account capabilities.',
+                        *(['Open (no-login) mode: any local user or process that can reach 127.0.0.1 can operate this account.']
+                          if cfg.mode == 'open' else []),
                         'Cloudflare Tunnel is browser ingress; it does not proxy tool scan traffic.',
                         'No embedded GUI desktop, GPU sharing/virtualization, or automatic HackerOne authorization.']}
 
@@ -74,7 +76,10 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
     cfg.validate()
     if os.geteuid() == 0 and not _allow_root_for_tests:
         raise RuntimeError('Run FOXWORX as a dedicated non-root Linux user, never root')
-    auth, store, registry = Auth(cfg), Store(cfg.state), Registry(cfg)
+    store, registry = Store(cfg.state), Registry(cfg)
+    accounts = Accounts(store)
+    auth = Auth(cfg, accounts)
+    security_log = logging.getLogger('foxworx.security')
     jobs, terminals = JobManager(cfg, store, registry), TerminalManager(cfg, store)
     knowledge = ToolIntelligence(cfg,registry)
     discovery = ToolDiscovery(registry,cfg.state)
@@ -134,6 +139,7 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
 
     app = FastAPI(title='FOXWORX Workbench', version=__version__, docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.cfg, app.state.auth, app.state.store = cfg, auth, store
+    app.state.accounts = accounts
     app.state.registry, app.state.jobs, app.state.terminals, app.state.ai = registry, jobs, terminals, ai
     app.state.hardware = hardware
     app.state.providers = providers
@@ -157,12 +163,21 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         if error:status['provider_error']=error
         return status
 
+    # Endpoints reachable without a session: mode discovery and the login itself.
+    public_api = {'/api/auth-mode', '/api/login'}
+
     @app.middleware('http')
     async def guard(request: Request, call_next):
         try:
             auth.check_host(request)
-            if cfg.mode == 'cloudflare':
-                await auth.actor(request)
+            path = request.url.path
+            # Defence in depth: every API route is authenticated, and every
+            # API mutation is same-origin + CSRF-checked, before routing or
+            # body validation, even if a handler forgets its own check.
+            if cfg.mode == 'cloudflare' or (path.startswith('/api/') and path not in public_api):
+                who = await auth.actor(request)
+                if path.startswith('/api/') and request.method in ('POST','PUT','PATCH','DELETE'):
+                    auth.mutation(request, who)
             if request.method in ('POST','PUT','PATCH','DELETE'):
                 raw_length = request.headers.get('content-length')
                 if raw_length is None or not raw_length.isdecimal() or 'transfer-encoding' in request.headers:
@@ -184,44 +199,70 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         if mutate: auth.mutation(request, who)
         return who.name
 
+    # The HTML shell carries no data, but it is still only served to an
+    # authenticated browser; others are sent to the sign-in page.
     @app.get('/')
-    async def index():
+    async def index(request: Request):
+        if not await auth.authenticated(request):
+            return RedirectResponse('/login', status_code=303)
+        return FileResponse(ROOT/'static/index.html')
+
+    @app.get('/login')
+    async def login_page(request: Request):
+        if cfg.mode == 'open' or await auth.authenticated(request):
+            return RedirectResponse('/', status_code=303)
         return FileResponse(ROOT/'static/index.html')
 
     @app.get('/api/auth-mode')
     async def auth_mode():
-        return {'mode':cfg.mode, 'version':__version__, 'public_origin':cfg.public_origin}
+        return {'mode':cfg.mode, 'version':__version__, 'public_origin':cfg.public_origin,
+                'login':auth.login_enabled}
 
     @app.post('/api/login')
     async def login(spec: Login, request: Request):
-        if cfg.mode == 'open':
-            raise HTTPException(404, 'Login is not required in token-free mode')
+        if not auth.login_enabled:
+            raise HTTPException(404, 'Password login is not used in this authentication mode')
         auth.origin(request)
-        token = auth.login(spec.token, remember=spec.remember)
-        response = JSONResponse({'ok':True})
-        response.set_cookie('foxworx_local',token,httponly=True,
-                            secure=(cfg.mode == 'proxy' or auth.is_public_host(request)),
-                            samesite='lax',max_age=(30 * 86400 if spec.remember else 28800),path='/')
-        store.event('local-operator','local-login')
+        client = request.client.host if request.client else 'unknown'
+        try:
+            who, cookie, max_age = await asyncio.to_thread(auth.login, client, spec.token, spec.username,
+                                                           spec.password, spec.remember)
+        except HTTPException as exc:
+            if exc.status_code in (401, 429):
+                # Never log the submitted secret; the name is useful for spotting spraying.
+                security_log.warning('login-failed status=%s client=%s operator=%r', exc.status_code, client,
+                                     (spec.username or '<setup-token>')[:40])
+                store.event('system:auth', 'login-failed', f'operator={(spec.username or "<setup-token>")[:40]} status={exc.status_code}')
+            raise
+        response = JSONResponse({'ok':True,'actor':who})
+        response.set_cookie(SESSION_COOKIE, cookie, httponly=True, secure=auth.secure_cookie(request),
+                            samesite='strict', max_age=max_age, path='/')
+        response.delete_cookie('foxworx_local', path='/')  # Pre-3.4 JWT cookie; no longer accepted.
+        security_log.info('login-succeeded operator=%s', who)
+        store.event(who, 'login', 'remember' if spec.remember else '')
         return response
 
     @app.post('/api/logout')
     async def logout(request: Request):
-        await actor(request,True)
+        owner = await actor(request,True)
         if cfg.mode == 'open':
-            return {'ok':True,'cloudflare_logout':None,'message':'Token-free mode has no login session to end'}
+            return {'ok':True,'cloudflare_logout':None,'message':'Open mode has no login session to end'}
+        auth.logout(request)
+        store.event(owner, 'logout')
         response = JSONResponse({'ok':True,'cloudflare_logout':'/cdn-cgi/access/logout' if cfg.mode == 'cloudflare' else None})
-        response.delete_cookie('foxworx_local',path='/')
+        response.delete_cookie(SESSION_COOKIE, path='/')
         return response
 
     @app.get('/api/session')
     async def session(request: Request):
-        owner = await actor(request)
+        who = await auth.actor(request)
+        owner = who.name
         if not store.list('engagement',owner):
             store.put('engagement',owner,{'name':'Local lab','include':['127.0.0.1','::1','localhost'],'exclude':[],
                                         'notes':'Local test environment only. Create a separate engagement for each authorized program.', 'program_url':''})
         ai_status=await ai_status_for(owner)
-        return {'actor':owner, 'csrf':auth.csrf(owner), **diagnostics(cfg,registry,jobs,terminals),
+        return {'actor':owner, 'csrf':auth.csrf(who), 'session_expires':who.expires,
+                **diagnostics(cfg,registry,jobs,terminals),
                 'ai_configured':ai_status['ready'],'ai_model':ai_status['selected']['model'],
                 'ai_provider':ai_status['selected']['provider']}
 

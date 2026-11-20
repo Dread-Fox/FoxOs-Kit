@@ -1,6 +1,6 @@
 # Installation — local port 8765; no Cloudflare required
 
-**Current release: FoxWorx-DreadFoxHacker-v3.3.3.** Default installation works locally without Cloudflare, and optionally accepts one configured public HTTPS hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for the exact Kali Pi procedure, preserving existing state, and optional future HTTPS proxy mode.
+**Current release: FoxWorx-DreadFoxHacker-v3.4.0.** The default installation requires sign-in, works locally without Cloudflare, and optionally accepts one configured public HTTPS hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for sign-in, operator accounts, upgrades and remote access.
 
 
 ## 1. Choose the host account
@@ -13,17 +13,17 @@ Keep the host powered, cooled and backed by reliable storage. Job logs and artif
 
 ## 2. Extract and install
 
-Extract the release ZIP under your home directory. The top-level directory is `FoxWorx-DreadFoxHacker-v3.3.3`. Use a path without whitespace, quotes, percent signs or backslashes; the installer validates this to avoid systemd quoting problems. Do not move it after installation without rerunning the installer.
+Extract the release ZIP under your home directory. The top-level directory is `FoxWorx-DreadFoxHacker-v3.4.0`. Use a path without whitespace, quotes, percent signs or backslashes; the installer validates this to avoid systemd quoting problems. Do not move it after installation without rerunning the installer.
 
 ```bash
-cd ~/FoxWorx-DreadFoxHacker-v3.3.3
+cd ~/FoxWorx-DreadFoxHacker-v3.4.0
 bash scripts/install.sh --preflight # no modifications
 bash scripts/install.sh
 ```
 
-The installer creates `.venv`, installs pinned direct dependencies plus the LiteLLM AI extra by default, preserves existing credentials and persistent state, backs up and migrates the mode/port/origin to token-free localhost:8765, and registers **foxworx-workbench.service** as your user. It requests sudo only if `python3`, `python3-venv`, or `ca-certificates` is missing. It does not run an unattended full OS upgrade. `unzip` is needed separately to extract a ZIP.
+The installer creates `.venv`, installs pinned direct dependencies plus the LiteLLM AI extra by default, preserves existing credentials, persistent state and **authentication settings**, and registers **foxworx-workbench.service** as your user. It requests sudo only if `python3`, `python3-venv`, or `ca-certificates` is missing. It does not run an unattended full OS upgrade. `unzip` is needed separately to extract a ZIP.
 
-**Architecture-specific first-run defaults:** ARM64 nodes start with 2 managed jobs, 4 terminal sessions and a 256 MiB free-disk reserve. x86-64 nodes start with 4 jobs, 8 terminals and a 1024 MiB free-disk reserve. These are application resource limits, not guaranteed performance or CUDA settings. **Existing resource limits, secrets, and state are preserved; only mode/port/origin are migrated to local-only when needed.**
+**Architecture-specific first-run defaults:** ARM64 nodes start with 2 managed jobs, 4 terminal sessions and a 256 MiB free-disk reserve. x86-64 nodes start with 4 jobs, 8 terminals and a 1024 MiB free-disk reserve. These are application resource limits, not guaranteed performance or CUDA settings. **Existing resource limits, secrets, state and authentication settings are preserved.** The single exception is the v3.3.x no-login default (`open` without `FOXWORX_OPEN_MODE_ACK`), which is moved to login-required `local` mode with a backup at `settings.env.before-v3.4.0` and a new setup token printed once.
 
 See [Pi and Z790 platform guide](PLATFORMS.md), including optional GPU inference and SSH forwarding to a workstation-hosted model.
 
@@ -40,17 +40,21 @@ The v2 service is distinct from v1's **foxworx.service**. If another service is 
 
 Stopping a service can interrupt work. The installer does not delete or silently stop v1 or v2. It refuses to replace a running workbench service; stop it yourself after preserving needed evidence, then rerun the installer. V2.4 reuses the v2 settings and SQLite state; it does not delete the old source folder.
 
-## 3. Token-free local access
+## 3. Sign in
 
-Start the systemd user service and open the browser. There is no login token or sign-in screen:
+The installer prints a **setup token once** on a fresh install (or when it upgrades a no-login v3.3.x configuration). Only its hash is stored, so copy it now.
 
 ```bash
 systemctl --user status foxworx-workbench --no-pager
 ```
 
-**http://127.0.0.1:8765**
+Open **http://127.0.0.1:8765**, leave **Operator name** empty and paste the token. Then create a named account for each person and use those from now on:
 
-The backend still validates the browser's Origin and CSRF header for mutations, and uses short-lived WebSocket tickets. These are application request-integrity checks, **not an authentication barrier**. With the default `open` mode, any visitor who can reach the endpoint shares the Linux service account's ability to run commands and access saved data. Cloudflare is optional and managed separately by you.
+```bash
+bash scripts/operator.sh add alice
+```
+
+Lost the token: `bash scripts/configure.sh --rotate-token` (prints a new one and revokes every session). Every API route, the UI and terminal WebSockets require a session; mutations also need same-origin and CSRF checks. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for session lifetimes, rate limits and the explicit no-login opt-in.
 
 ## 4. Configure AI provider and model
 
@@ -66,7 +70,7 @@ The configuration is stored at `~/.config/foxworx-workbench/settings.env` with m
 
 ## 5. Optional remote tunnel (not part of installation)
 
-No tunnel, domain or Cloudflare credentials are required. FOXWORX binds only to `127.0.0.1:8765` and works in the Pi's own desktop browser immediately after install. If you want a tunnel later, publish your selected hostname to `http://127.0.0.1:8765` in your existing Cloudflare setup. The FOXWORX app requires **no** tunnel setting, public-origin allowlist, setup token, or Cloudflare configuration. Preserve WebSocket support. Everyone who can reach the hostname can operate the Kali workbench, so configure external access restrictions independently if you want them.
+No tunnel, domain or Cloudflare credentials are required. FOXWORX binds only to `127.0.0.1:8765`. To add a tunnel later, route your hostname to `http://127.0.0.1:8765` with WebSocket support and a preserved `Host` header, then register it: `bash scripts/configure.sh --public-origin https://host.example` and restart the service. Sign-in stays enforced for tunnel visitors; an upstream access policy with MFA is recommended as an additional layer.
 
 ## 6. Keep the service available after logout
 
@@ -108,7 +112,7 @@ This example assumes the default state path. Configuration/API keys are **not in
 
 ## Acceptance gate before remote team use
 
-Verify ARM64 and Python; non-root/no broad sudo; service start and reboot; permitted and forbidden Access identities; missing/forged token denial; browser terminal control/reconnect; no jobs until approval; actual local tool exit status; stop and resource limits; evidence handling; optional live AI request; program-specific authorization. Record results in your deployment log. The release's build-container tests do not replace these checks.
+Verify ARM64 and Python; non-root/no broad sudo; service start and reboot; sign-in required on `/`, the API and terminals; wrong-password and rate-limit denial; permitted and forbidden Access identities (legacy Cloudflare mode); missing/forged token denial; browser terminal control/reconnect; no jobs until approval; actual local tool exit status; stop and resource limits; evidence handling; optional live AI request; program-specific authorization. Record results in your deployment log. The release's build-container tests do not replace these checks.
 
 ## DreadFox companion and conversations (v2.5)
 

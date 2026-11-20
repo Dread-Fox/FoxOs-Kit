@@ -59,11 +59,14 @@ if [[ "$WITHOUT_AI" -eq 0 ]]; then
   .venv/bin/python -m pip install --disable-pip-version-check -r requirements-ai.txt
 fi
 .venv/bin/python -m pip check
-.venv/bin/python -m foxworx.cli configure --local-service --profile "$PROFILE"
+# Creates an authenticated config on first install (prints the setup token once).
+# On upgrade, existing authentication, port and origins are preserved; only the
+# legacy unacknowledged open mode is moved to login-required local mode.
+.venv/bin/python -m foxworx.cli configure --upgrade --profile "$PROFILE"
 mkdir -p "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/foxworx-workbench.service" <<EOF
 [Unit]
-Description=FOXWORX Kali Workbench v3.3.3 (local + optional tunnel)
+Description=FOXWORX Kali Workbench v3.4.0 (authenticated local service)
 After=network.target
 
 [Service]
@@ -103,14 +106,16 @@ PY
   systemctl --user is-active --quiet foxworx-workbench || { journalctl --user -u foxworx-workbench -n 40 --no-pager; exit 1; }
 fi
 echo
-printf 'Installed v3.3.3 in %s\n' "$ROOT"
-echo 'Local browser:           http://127.0.0.1:8765'
+printf 'Installed v3.4.0 in %s\n' "$ROOT"
+echo 'Local browser:           http://127.0.0.1:8765  (sign-in required)'
+echo 'First sign-in:           the setup token printed above (fresh installs and security upgrades only)'
+echo 'Named operator accounts: bash scripts/operator.sh add <name>'
+echo 'Lost setup token:        bash scripts/configure.sh --rotate-token'
 echo 'Optional provider / proxy settings: bash scripts/configure.sh'
-echo 'Access mode:             token-free; no setup login required'
 echo 'Diagnostics:             bash scripts/doctor.sh'
 echo 'Logs:                    journalctl --user -u foxworx-workbench -n 80 --no-pager'
 echo 'For service after logout/reboot, an administrator may approve: sudo loginctl enable-linger "$USER"'
 echo 'Rabbit Hole retains the v2.8 root-owned adapter policy: docs/CLI-ADAPTERS.md'
 echo 'Optional Codex Agent + ChatGPT sign-in: docs/CODEX-AGENT.md'
-echo 'Cloudflare is NOT required. Add your own tunnel to http://127.0.0.1:8765 at any time.'
+echo 'Cloudflare is NOT required. A tunnel needs --public-origin and keeps login enforced.'
 echo 'See docs/LOCAL-SERVICE.md for local and tunnel access, security and troubleshooting.'

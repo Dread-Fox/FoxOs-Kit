@@ -6,8 +6,17 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra='forbid')
 
 class Login(StrictModel):
-    token: str = Field(min_length=1, max_length=256)
+    """Either a setup ``token`` or an operator ``username`` + ``password``."""
+    token: str = Field(default='', max_length=256)
+    username: str = Field(default='', max_length=32)
+    password: str = Field(default='', max_length=256)
     remember: bool = False
+
+    @model_validator(mode='after')
+    def one_method(self):
+        if bool(self.username) == bool(self.token) or (self.username and not self.password):
+            raise ValueError('Provide an operator name and password, or the setup token')
+        return self
 
 class Engagement(StrictModel):
     name: str = Field(min_length=1, max_length=100)

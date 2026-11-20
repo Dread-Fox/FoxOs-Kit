@@ -1,3 +1,16 @@
+## v3.4.0 — Authentication by default and Rabbit Hole guardrails
+
+### Security: authentication on by default (critical)
+
+- **Breaking:** sign-in is now required for the web UI, every `/api/*` route and every terminal WebSocket. `FOXWORX_AUTH_MODE=local` is the default. Authentication and CSRF are also enforced centrally in middleware, so a handler that forgets its own check is still protected.
+- New per-operator accounts (`scripts/operator.sh add|passwd|remove|logout|list`) with scrypt password hashes. The installer's setup token is shown once and stored only as a SHA-256 hash; it maps to the existing `local-operator` identity so pre-3.4 data stays reachable.
+- Server-side sessions (8 hours, or 7 days when remembered) that are revoked on sign-out, password change, operator removal and `--rotate-token`. Cookies are `HttpOnly`, `SameSite=Strict`, and `Secure` over HTTPS. CSRF tokens are bound to the session.
+- Sign-in throttling per client address, per operator name and globally. Failed attempts are logged (never the secret) and audited under `system:auth`; successful sign-ins and sign-outs are audited per operator.
+- Open (no-login) mode now requires `FOXWORX_OPEN_MODE_ACK=I_UNDERSTAND_NO_LOGIN`. It refuses to start on a non-loopback `FOXWORX_BIND_HOST` or with a public origin, and rejects proxied/tunnelled requests.
+- Fixed: open mode did not validate the `Host` header, so a DNS-rebinding web page could act same-origin against `127.0.0.1:8765`, read the CSRF token and open a terminal. Every mode now enforces the Host allowlist.
+- **Upgrade behaviour:** `scripts/install.sh` now runs `configure --upgrade`, which preserves existing `local`, `proxy` and `cloudflare` settings exactly (v3.3.3 migrated them to token-free mode). An unacknowledged v3.3.x `open` configuration is moved to `local` with a backup at `settings.env.before-v3.4.0` and a newly printed setup token. `scripts/local-service.sh` never selects open mode.
+- New `configure` flags: `--upgrade`, `--insecure-open-mode`, `--require-login`. `--rotate-token` now revokes all sessions. `--show-token` only works for legacy plaintext tokens.
+
 ## v3.3.3 — Token-free workbench and tunnel-independent operation
 
 - Removed mandatory FOXWORX setup-token login from the default installation. Fresh installs open directly on `http://127.0.0.1:8765`; the UI suppresses the login/logout workflow.

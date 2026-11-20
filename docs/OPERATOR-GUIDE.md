@@ -1,4 +1,4 @@
-> **v3.3.3 local + tunnel:** Open http://127.0.0.1:8765 locally, or allow one protected HTTPS tunnel hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md).
+> **v3.4.0:** Sign in at http://127.0.0.1:8765 with your operator account (or the installer's setup token for the first sign-in). One registered HTTPS tunnel hostname can be added without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md).
 
 # Operator guide
 

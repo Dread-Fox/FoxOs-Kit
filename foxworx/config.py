@@ -2,6 +2,9 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urlsplit
+import hashlib
+import hmac
+import ipaddress
 import os
 import json
 import re
@@ -10,13 +13,35 @@ from dotenv import dotenv_values
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = Path.home() / '.config/foxworx-workbench/settings.env'
 SAFE_PATH = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
+# Value an administrator must set to run without application login. Deliberately
+# verbose so it cannot be enabled by accident or by a stale v3.3.x default.
+OPEN_MODE_ACK = 'I_UNDERSTAND_NO_LOGIN'
+LOOPBACK_NAMES = ('127.0.0.1', '::1', 'localhost')
+
+
+def is_loopback(host: str) -> bool:
+    """True for loopback IP literals and the name ``localhost``."""
+    host = (host or '').strip().strip('[]').lower()
+    if host == 'localhost':
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def hash_setup_token(token: str) -> str:
+    return 'sha256:' + hashlib.sha256(token.encode()).hexdigest()
 
 @dataclass
 class Settings:
     state: Path
     secret: str
     local_token: str
-    mode: str = 'open'
+    mode: str = 'local'
+    local_token_hash: str = ''  # 'sha256:<hex>'; preferred over the legacy plaintext token.
+    bind_host: str = '127.0.0.1'
+    open_mode_ack: str = ''  # Must equal OPEN_MODE_ACK for mode='open'.
     port: int = 8765
     origin: str = 'http://127.0.0.1:8765'
     public_origin: str = ''  # Optional explicitly approved HTTPS tunnel hostname.
@@ -66,8 +91,23 @@ class Settings:
             raise ValueError('FOXWORX_AI_ENCRYPTION_KEY must be at least 40 characters')
         if len(self.secret) < 32:
             raise ValueError('Run scripts/configure.sh: a session secret of at least 32 characters is required')
-        if self.mode == 'local' and len(self.local_token) < 32:
-            raise ValueError('Run scripts/configure.sh: a local setup token of at least 32 characters is required')
+        if self.mode in ('local', 'proxy') and len(self.local_token) < 32 and not self.has_token_hash:
+            raise ValueError('Run scripts/configure.sh --rotate-token: a setup token is required for login')
+        if self.local_token_hash and not self.has_token_hash:
+            raise ValueError('FOXWORX_LOCAL_TOKEN_HASH must be sha256:<64 hex digits>')
+        if not is_loopback(self.bind_host):
+            if self.mode == 'open':
+                raise ValueError('Refusing to start: open (no-login) mode may only bind a loopback address, '
+                                 f'not {self.bind_host!r}. Use authenticated local mode instead.')
+            raise ValueError('FOXWORX_BIND_HOST must be a loopback address. Publish the workbench through an '
+                             'HTTPS reverse proxy or tunnel in authenticated mode instead of binding a LAN address.')
+        if self.mode == 'open':
+            if self.open_mode_ack != OPEN_MODE_ACK:
+                raise ValueError('Open mode disables login. It requires the explicit opt-in '
+                                 f'FOXWORX_OPEN_MODE_ACK={OPEN_MODE_ACK} (scripts/configure.sh --insecure-open-mode).')
+            if self.public_origin:
+                raise ValueError('Open (no-login) mode cannot be combined with FOXWORX_PUBLIC_ORIGIN. '
+                                 'Remote access requires authenticated local mode.')
         if not 1024 <= self.port <= 65535:
             raise ValueError('FOXWORX_PORT must be between 1024 and 65535')
         if self.mode == 'cloudflare':
@@ -78,7 +118,7 @@ class Settings:
         if self.public_origin:
             # An external hostname is always opt-in, and never disables local login.
             u = urlsplit(self.public_origin)
-            if (self.mode not in ('local', 'open') or u.scheme != 'https' or not u.hostname or
+            if (self.mode != 'local' or u.scheme != 'https' or not u.hostname or
                     not re.fullmatch(r'[a-zA-Z0-9.-]+', u.hostname) or
                     u.hostname in ('localhost', '127.0.0.1', '::1') or
                     u.username or u.password or u.path or u.query or u.fragment or
@@ -105,6 +145,18 @@ class Settings:
                 raise ValueError('Extra tool paths must be absolute')
 
     @property
+    def has_token_hash(self) -> bool:
+        return bool(re.fullmatch(r'sha256:[0-9a-f]{64}', self.local_token_hash or ''))
+
+    def check_setup_token(self, candidate: str) -> bool:
+        """Constant-time comparison against the hashed (or legacy plaintext) setup token."""
+        if self.has_token_hash:
+            return hmac.compare_digest(hash_setup_token(candidate), self.local_token_hash)
+        if len(self.local_token) >= 32:
+            return hmac.compare_digest(candidate.encode(), self.local_token.encode())
+        return False
+
+    @property
     def origins(self) -> set[str]:
         if self.mode in ('proxy', 'cloudflare'):
             return {self.origin}
@@ -122,7 +174,10 @@ class Settings:
         cfg = cls(
             state=Path(val('FOXWORX_STATE', str(Path.home() / '.local/share/foxworx-workbench-v2'))).expanduser(),
             secret=val('FOXWORX_SESSION_SECRET'), local_token=val('FOXWORX_LOCAL_TOKEN'),
-            mode=val('FOXWORX_AUTH_MODE', 'open'), port=int(val('FOXWORX_PORT', '8765')),
+            mode=val('FOXWORX_AUTH_MODE', 'local'), port=int(val('FOXWORX_PORT', '8765')),
+            local_token_hash=val('FOXWORX_LOCAL_TOKEN_HASH'),
+            bind_host=val('FOXWORX_BIND_HOST', '127.0.0.1'),
+            open_mode_ack=val('FOXWORX_OPEN_MODE_ACK'),
             origin=val('FOXWORX_ORIGIN', 'http://127.0.0.1:8765').rstrip('/'),
             public_origin=val('FOXWORX_PUBLIC_ORIGIN').rstrip('/'),
             cf_team=val('CF_TEAM_DOMAIN').rstrip('/'), cf_aud=val('CF_ACCESS_AUD'),
