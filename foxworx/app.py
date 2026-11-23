@@ -72,6 +72,11 @@ def diagnostics(cfg, registry, jobs, terminals):
                         'No embedded GUI desktop, GPU sharing/virtualization, or automatic HackerOne authorization.']}
 
 
+def _consume_result(task: asyncio.Task) -> None:
+    """Retrieve a finished worker's exception so asyncio doesn't log it as never retrieved."""
+    if not task.cancelled(): task.exception()
+
+
 def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = False, ai_transport=None) -> FastAPI:
     cfg = cfg or Settings.load()
     cfg.validate()
@@ -778,8 +783,12 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         except (HTTPException,WebSocketDisconnect,OSError,ValueError,RuntimeError,TimeoutError):
             pass
         finally:
-            for worker in workers: worker.cancel()
-            if workers: await asyncio.gather(*workers,return_exceptions=True)
+            for worker in workers:
+                worker.cancel()
+                worker.add_done_callback(_consume_result)
+            # asyncio.wait, not gather: if this task is cancelled meanwhile, gather re-raises a *worker's*
+            # CancelledError, which AnyIO's cancel scope doesn't recognise as its own and lets escape.
+            if workers: await asyncio.wait(workers)
             if session and queue: terminals.detach(session,queue)
             try: await ws.close(code=1000)
             except (RuntimeError,WebSocketDisconnect): pass
