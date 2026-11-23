@@ -1,0 +1,11 @@
+# Bandit configuration used locally and in CI.
+# Skipped tests are reviewed design decisions, not ignored findings:
+#   B404/B603: subprocess is used only with fixed argv lists (never shell=True)
+#              to run local tooling (dpkg-query, man, nvidia-smi, iw) and
+#              operator-approved jobs. Command construction is reviewed in
+#              jobs.py/command_templates.py and guarded by rabbit_guard.py.
+#   B606:      pty_child.py execs the configured login shell for the terminal
+#              feature by design (argv list, no shell interpolation).
+# Everything else is annotated inline with `# nosec <id>` and a reason.
+skips: ['B404', 'B603', 'B606']
+exclude_dirs: ['tests', '.venv']

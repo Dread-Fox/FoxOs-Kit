@@ -1,0 +1,5 @@
+# Optional LiteLLM gateway runtime (installed by default; omit with --without-ai).
+# Cloud providers and local Ollama/LM Studio/vLLM/OpenAI-compatible APIs.
+litellm==1.110.1
+# Transitive pin: filelock < 4.2.1 has published advisories (pip-audit).
+filelock==4.2.12

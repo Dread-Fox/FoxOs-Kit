@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zenko · DreadFox Kitsune — evolution preview</title>
+<style>
+  :root{
+    --bg:#0c111a;--surface:#121a26;--raised:#192333;--line:#293548;
+    --text:#edf1f6;--muted:#a8b5c7;--accent:#ffaf62;--green:#6fd6ad;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:radial-gradient(ellipse at 60% 15%,#1a2740,var(--bg) 62%);
+    color:var(--text);font:14px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;
+    display:flex;align-items:center;justify-content:center;padding:26px}
+  .widget{width:380px;border:1px solid #b882725b;border-radius:16px;overflow:hidden;
+    background:linear-gradient(170deg,var(--surface),var(--raised));box-shadow:0 24px 70px #0007}
+  .eyebrow{font-size:10px;letter-spacing:1.8px;color:var(--muted);font-weight:750;text-transform:uppercase}
+  .head{padding:16px 18px 6px;display:flex;justify-content:space-between;align-items:flex-start}
+  .head h1{font-size:20px;margin:5px 0 0;letter-spacing:-.4px}
+  .head .lv{text-align:right}
+  .head .lv strong{font-size:22px;color:var(--accent)}
+  .head .lv small{display:block;font-size:10px;color:var(--muted)}
+  .stage-pill{display:inline-block;margin-top:7px;padding:4px 11px;border-radius:30px;
+    border:1px solid var(--line);background:var(--surface);color:var(--accent);font-size:11px;font-weight:650}
+  .scene{position:relative;height:300px;margin:6px 14px 2px;border-radius:13px;overflow:hidden;
+    background:radial-gradient(ellipse at 50% 42%,#20304d,#0e1626 70%);border:1px solid #2a3850}
+  svg{position:absolute;inset:0;width:100%;height:100%}
+  .bars{padding:8px 18px 4px;display:grid;gap:9px}
+  .barrow .barlabel{display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:5px}
+  .barlabel strong{color:var(--text);font-size:10px}
+  .track{height:7px;border-radius:9px;background:#30394b;overflow:hidden}
+  .fill{height:100%;width:0;border-radius:9px;transition:width .5s ease}
+  .fill.xp{background:linear-gradient(90deg,#d77d6b,#ffc391)}
+  .fill.bond{background:linear-gradient(90deg,#d47494,#fab5c3)}
+  .fill.curio{background:linear-gradient(90deg,#8d8cd9,#c7b3ff)}
+  .next{font-size:11px;color:var(--accent);margin:4px 18px 0}
+  .controls{margin:12px 18px 18px;padding-top:13px;border-top:1px solid var(--line)}
+  .controls label{font-size:11px;color:var(--muted);display:flex;justify-content:space-between}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:7px 0 10px}
+  .row{display:flex;gap:8px}
+  button{flex:1;min-height:34px;border:1px solid var(--line);border-radius:8px;background:var(--raised);
+    color:var(--text);font:inherit;font-size:12px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);color:#151719;border-color:var(--accent);font-weight:650}
+  .tails-badge{position:absolute;left:12px;bottom:11px;font-size:11px;color:var(--muted);
+    background:#0c1422bb;border:1px solid #2a3850;border-radius:20px;padding:3px 9px}
+  .mood-badge{position:absolute;right:12px;top:11px;font-size:11px;color:var(--accent);
+    background:#0c1422bb;border:1px solid #2a3850;border-radius:20px;padding:3px 9px}
+</style>
+</head>
+<body>
+<div class="widget">
+  <div class="head">
+    <div>
+      <div class="eyebrow">✦ Zenko companion</div>
+      <h1 id="name">DreadFox</h1>
+      <span class="stage-pill" id="stage">Fox Kit</span>
+    </div>
+    <div class="lv"><strong id="lv">1</strong><small>LEVEL</small></div>
+  </div>
+
+  <div class="scene">
+    <svg id="fox" viewBox="0 0 380 300" aria-label="An evolving kitsune spirit"></svg>
+    <span class="mood-badge" id="mood">Curious ✧</span>
+    <span class="tails-badge" id="tails">1 of 9 tails</span>
+  </div>
+
+  <div class="bars">
+    <div class="barrow"><div class="barlabel"><span>Experience</span><strong id="xpl">0 / 50 XP</strong></div><div class="track"><div class="fill xp" id="xp"></div></div></div>
+    <div class="barrow"><div class="barlabel"><span>Bond</span><strong id="bondl">45</strong></div><div class="track"><div class="fill bond" id="bond"></div></div></div>
+    <div class="barrow"><div class="barlabel"><span>Curiosity</span><strong id="curiol">50</strong></div><div class="track"><div class="fill curio" id="curio"></div></div></div>
+  </div>
+  <p class="next" id="next">Next tail at 50 XP and 1 day together.</p>
+
+  <div class="controls">
+    <label>Evolution stage <span id="stagenum">1 / 9</span></label>
+    <input type="range" id="slider" min="1" max="9" value="1" step="1">
+    <div class="row">
+      <button id="evolve" class="primary">▶ Watch it evolve</button>
+      <button id="reset">↺ Fox Kit</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Nine kitsune stages. Each: name, lifetime XP floor, min days, fur/fire/aura palette, mood.
+const STAGES = [
+  {name:'Fox Kit',            xp:0,    days:0,   fur:'#ffb673', fire:'#ffd79a', aura:'#ffae62', mood:'Curious',   mask:.25},
+  {name:'Curious Scout',      xp:50,   days:1,   fur:'#ffac5c', fire:'#ffcf8a', aura:'#ff9f55', mood:'Alert',     mask:.4},
+  {name:'Clever Trickster',   xp:120,  days:3,   fur:'#ff9f6b', fire:'#ffbf8f', aura:'#f58463', mood:'Playful',   mask:.55},
+  {name:'Forest Guardian',    xp:250,  days:7,   fur:'#e7a07e', fire:'#9ad8da', aura:'#6fd6ad', mood:'Watchful',  mask:.68},
+  {name:'Arcane Sage',        xp:450,  days:14,  fur:'#d6a0b4', fire:'#b9a6ff', aura:'#8d8cd9', mood:'Focused',   mask:.78},
+  {name:'Moonlit Mystic',     xp:800,  days:30,  fur:'#b9c3dd', fire:'#9ad8ff', aura:'#85afc6', mood:'Serene',    mask:.86},
+  {name:'Silver Elder',       xp:1400, days:90,  fur:'#cdd6e1', fire:'#dfe8f6', aura:'#aab8cc', mood:'Wise',      mask:.92},
+  {name:'Starbound Spirit',   xp:2200, days:180, fur:'#dcd3f6', fire:'#c7b3ff', aura:'#a88cff', mood:'Radiant',   mask:.97},
+  {name:'Nine-Tailed Guardian',xp:3500,days:365, fur:'#fff0df', fire:'#ffe4b9', aura:'#ffd27a', mood:'Ascendant', mask:1},
+];
+const ns='http://www.w3.org/2000/svg';
+const S=(n,a)=>{const e=document.createElementNS(ns,n);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const $=id=>document.getElementById(id);
+
+function draw(stageIndex){
+  const st=STAGES[stageIndex], tails=stageIndex+1, svg=$('fox');
+  svg.replaceChildren();
+  // soft defs: tail gradient + fox-fire glow
+  const defs=S('defs',{});
+  const g=S('radialGradient',{id:'tailpaint',cx:'50%',cy:'30%',r:'75%'});
+  g.append(S('stop',{offset:'0%','stop-color':st.fire}));
+  g.append(S('stop',{offset:'100%','stop-color':st.fur,'stop-opacity':'.55'}));
+  const blur=S('filter',{id:'glow',x:'-60%',y:'-60%',width:'220%',height:'220%'});
+  blur.append(S('feGaussianBlur',{stdDeviation:stageIndex>=5?4.2:2.6,result:'b'}));
+  const m=S('feMerge',{});m.append(S('feMergeNode',{in:'b'}));m.append(S('feMergeNode',{in:'SourceGraphic'}));blur.append(m);
+  defs.append(g,blur);svg.append(defs);
+
+  const cx=190, cy=172;
+  // aura ring (intensifies with stage)
+  svg.append(S('circle',{cx,cy:cy-6,r:70+stageIndex*4,fill:'none',stroke:st.aura,
+    'stroke-width':1.2,opacity:0.07+stageIndex*0.03,filter:'url(#glow)'}));
+
+  // tails fan out behind the body, longer and more curved as it ages
+  const span = tails===1?0:1.15;
+  for(let i=0;i<tails;i++){
+    const a = tails===1 ? -0.15 : (-span + i*(2*span/(tails-1)));
+    const len = 92+stageIndex*6;
+    const tipx=cx+Math.sin(a)*len, tipy=cy+22-Math.cos(a)*len;
+    const bx=cx+Math.sin(a)*(len*0.62), by=cy+30-Math.cos(a)*(len*0.62);
+    const d=`M ${cx-9} ${cy+40} Q ${bx-20} ${by+30} ${tipx} ${tipy} Q ${bx+22} ${by+34} ${cx+11} ${cy+40} Z`;
+    const tail=S('path',{d,fill:'url(#tailpaint)',stroke:st.fur,'stroke-width':1.6,
+      opacity:0.9,filter:'url(#glow)'});
+    tail.style.transformOrigin=`${cx}px ${cy+40}px`;
+    tail.animate([{transform:`rotate(${a*2-2}deg)`},{transform:`rotate(${a*2+2}deg)`}],
+      {duration:2600+i*140,direction:'alternate',iterations:Infinity,easing:'ease-in-out'});
+    svg.append(tail);
+    // white tail tip (kitsune hallmark)
+    svg.append(S('circle',{cx:tipx,cy:tipy,r:4+ (stageIndex>=6?1.5:0),fill:'#fff0df',opacity:.9,filter:'url(#glow)'}));
+  }
+
+  // body
+  svg.append(S('ellipse',{cx,cy:cy+30,rx:46,ry:38,fill:st.fur,opacity:.96}));
+  // head
+  svg.append(S('circle',{cx,cy,r:40,fill:st.fur}));
+  // ears (triangular, with inner color)
+  for(const s of [-1,1]){
+    svg.append(S('polygon',{points:`${cx+s*20},${cy-30} ${cx+s*40},${cy-66} ${cx+s*46},${cy-26}`,fill:st.fur}));
+    svg.append(S('polygon',{points:`${cx+s*25},${cy-32} ${cx+s*37},${cy-56} ${cx+s*41},${cy-30}`,fill:st.fire,opacity:.65}));
+  }
+  // cheek mask markings (grow bolder with stage)
+  for(const s of [-1,1]){
+    svg.append(S('path',{d:`M ${cx+s*8} ${cy-4} Q ${cx+s*30} ${cy-2} ${cx+s*34} ${cy+20} Q ${cx+s*20} ${cy+14} ${cx+s*10} ${cy+8} Z`,
+      fill:st.aura,opacity:0.15+st.mask*0.5}));
+  }
+  // snout + nose
+  svg.append(S('path',{d:`M ${cx-13} ${cy+8} Q ${cx} ${cy+30} ${cx+13} ${cy+8} Q ${cx} ${cy+16} ${cx-13} ${cy+8} Z`,fill:'#fff0df',opacity:.9}));
+  svg.append(S('circle',{cx,cy:cy+13,r:4,fill:'#2a1b22'}));
+  // eyes (glowing, brighter as it ascends)
+  for(const s of [-1,1]){
+    svg.append(S('ellipse',{cx:cx+s*15,cy:cy-4,rx:6.5,ry:8,fill:'#1b1017'}));
+    const eye=S('circle',{cx:cx+s*15,cy:cy-4,r:3.4,fill:st.fire,filter:'url(#glow)'});
+    eye.animate([{opacity:.75},{opacity:1}],{duration:1900,direction:'alternate',iterations:Infinity});
+    svg.append(eye);
+  }
+  // third-eye mark for sage stages+
+  if(stageIndex>=4){
+    const te=S('circle',{cx,cy:cy-24,r:3.2,fill:st.aura,filter:'url(#glow)'});
+    te.animate([{opacity:.4},{opacity:1}],{duration:2400,direction:'alternate',iterations:Infinity});
+    svg.append(te);
+  }
+
+  // floating kitsune-fire (foxfire) orbs — count scales with stage
+  const flames=Math.max(0, stageIndex-1);
+  for(let i=0;i<flames;i++){
+    const angle=(i/flames)*Math.PI*2, r=78+ (i%2)*14;
+    const fx=cx+Math.cos(angle)*r, fy=cy-6+Math.sin(angle)*r*0.6;
+    const orb=S('circle',{cx:fx,cy:fy,r:3.2+ (stageIndex>=7?1.3:0),fill:st.fire,opacity:.85,filter:'url(#glow)'});
+    orb.animate([{transform:'translateY(0)',opacity:.4},{transform:'translateY(-9px)',opacity:1},{transform:'translateY(0)',opacity:.4}],
+      {duration:2600+i*180,iterations:Infinity,easing:'ease-in-out'});
+    svg.append(orb);
+  }
+  // starfield sparkle for the top stages
+  if(stageIndex>=7){
+    for(let i=0;i<14;i++){
+      const sx=20+Math.random()*340, sy=14+Math.random()*120;
+      const star=S('circle',{cx:sx,cy:sy,r:Math.random()*1.3+.5,fill:'#fff',opacity:.8});
+      star.animate([{opacity:.15},{opacity:.9}],{duration:1200+Math.random()*2000,direction:'alternate',iterations:Infinity});
+      svg.append(star);
+    }
+  }
+
+  // update readout
+  const next=STAGES[stageIndex+1];
+  $('name').textContent='DreadFox';
+  $('stage').textContent=st.name;
+  $('lv').textContent=stageIndex+1;
+  $('stagenum').textContent=(stageIndex+1)+' / 9';
+  $('tails').textContent=tails+' of 9 tails';
+  $('mood').textContent=st.mood+' ✧';
+  $('xpl').textContent= next ? st.xp+' / '+next.xp+' XP' : st.xp+' XP · max';
+  $('xp').style.width = next ? Math.min(100,(st.xp/next.xp)*100)+'%' : '100%';
+  $('bond').style.width=(45+stageIndex*6)+'%'; $('bondl').textContent=45+stageIndex*6;
+  $('curio').style.width=(50+stageIndex*5)+'%'; $('curiol').textContent=50+stageIndex*5;
+  $('next').textContent= next
+    ? `Next tail — ${st.name} → ${next.name} at ${next.xp} XP and ${next.days} days together.`
+    : 'All nine tails awakened. The guardian’s story continues.';
+}
+
+let idx=0, timer=null;
+const slider=$('slider');
+slider.addEventListener('input',()=>{idx=+slider.value-1;draw(idx);});
+$('reset').addEventListener('click',()=>{idx=0;slider.value=1;draw(0);});
+$('evolve').addEventListener('click',()=>{
+  if(timer){clearInterval(timer);timer=null;$('evolve').textContent='▶ Watch it evolve';return;}
+  $('evolve').textContent='⏸ Evolving…';
+  timer=setInterval(()=>{
+    idx=(idx+1)%9; slider.value=idx+1; draw(idx);
+    if(idx===8){clearInterval(timer);timer=null;$('evolve').textContent='▶ Watch it evolve';}
+  },1300);
+});
+draw(0);
+</script>
+</body>
+</html>

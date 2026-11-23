@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+      - name: Run pytest, compile check and script syntax check
+        run: PYTHON=python bash scripts/test.sh
+
+  security:
+    name: Lint and security scans
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install scanners
+        run: python -m pip install ruff==0.17.6 bandit==1.9.4 pip-audit==2.10.1
+      - name: Ruff
+        run: ruff check foxworx tests
+      - name: Bandit
+        run: bandit -q -r foxworx -c bandit.yaml
+      - name: pip-audit (runtime, AI and dev requirements)
+        run: |
+          pip-audit -r requirements.txt
+          pip-audit -r requirements-ai.txt
+          pip-audit -r requirements-dev.txt
