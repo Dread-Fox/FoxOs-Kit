@@ -26,7 +26,7 @@ For local abliterated models (Zenko), follow `~/zenko-scripts/README.md` (LM Stu
 | `desktop/` | `~/.local/share/applications`, `~/Desktop` | launchers: Bounty Radar, DreadFox Companion, FoxWorx |
 | `bin/foxworx-launch` | `~/.local/bin` | starts the FoxWorx workbench if needed and opens it in the browser |
 | `zenko/` | `~/zenko-scripts` | Zenko local-model kit: LM Studio model downloads (abliterated Qwen3.6-35B-A3B, Qwen3.8-27B, gpt-oss-20b, nomic-embed), `load_zenko.sh`, `talk.py` |
-| FoxWorx (cloned) | `~/FoxWorx-DreadFoxHacker`, `/etc/foxworx/adapter-policy.json` | the workbench (v3.5.0+: redesigned sanctuary, Zenko memory, companion export), its Rabbit Hole admin policy (installed CLI + all built-in workflows, only if none exists) and the companion link in `settings.env` |
+| `FoxWorx-DreadFoxHacker/` | `~/FoxWorx-DreadFoxHacker`, `/etc/foxworx/adapter-policy.json` | the full FoxWorx workbench source (bundled, with its history) — the workbench (v3.5.0+: redesigned sanctuary, Zenko memory, companion export), its Rabbit Hole admin policy (installed CLI + all built-in workflows, only if none exists) and the companion link in `settings.env` |
 | `websec/` | `~/websec`, `websec` | headless authz-testing framework (profiles/loot start empty) |
 | `toolkit/` | `~/toolkit`, `toolkit` | rolling Kali CLI tool catalog |
 | `claude/skills/` | `~/.claude/skills` | 14 `kali-*` pentest workflow skills |
@@ -41,4 +41,12 @@ Change the tagline: edit `LINE1`/`LINE2` in `~/foxos/build-tagline.py`, run it, 
 ## Never in this repo
 API tokens, `~/.config/hackerone/creds`, FoxWorx `settings.env`, Claude login, `h1.db`, recon/hunt output, reports,
 websec engagement profiles/loot, or client-engagement memory notes, the pet state (`~/h1/data/pet.json`), or model weights.
-FoxWorx Workbench has its own repo (`Dread-Fox/FoxWorx-DreadFoxHacker`); the installer clones it.
+FoxWorx Workbench is bundled in `FoxWorx-DreadFoxHacker/` (a git subtree of `Dread-Fox/FoxWorx-DreadFoxHacker`).
+
+## Updating the bundled FoxWorx
+Develop FoxWorx in its own checkout, then pull it into the kit:
+```bash
+cd ~/foxos-kit
+git subtree pull --prefix=FoxWorx-DreadFoxHacker https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker.git main
+```
+Changes made directly in the kit's copy can be sent back with `git subtree push --prefix=FoxWorx-DreadFoxHacker <repo> <branch>`.

@@ -5,7 +5,7 @@
 #   ./install.sh --no-rice       skip the FoxOS cosmetics
 #   ./install.sh --no-timers     don't enable the H1 sync/recon timers
 #   ./install.sh --no-rc         don't install the Claude Remote Control service
-#   ./install.sh --no-foxworx    don't clone/install the FoxWorx workbench (the companion widget still installs)
+#   ./install.sh --no-foxworx    don't install the bundled FoxWorx workbench (the companion widget still installs)
 # Run as your normal user (not root) from a terminal inside the desktop session. Uses sudo when needed.
 # Safe to re-run: existing creds, memory and backups are never overwritten.
 set -euo pipefail
@@ -135,10 +135,11 @@ fi
 # ------------------------------------------------------------------ FoxWorx workbench + companion link
 if [ $FOXWORX = 1 ]; then
   FW="$HOME/FoxWorx-DreadFoxHacker"
-  if [ ! -d "$FW/.git" ]; then
-    say "cloning FoxWorx workbench → $FW"
-    git clone -q https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker.git "$FW"
-  else say "FoxWorx already at $FW — left as is (git pull there to update)"; fi
+  if [ ! -e "$FW" ]; then
+    say "installing FoxWorx workbench from the kit → $FW"
+    cp -a "$KIT/FoxWorx-DreadFoxHacker" "$FW"
+    (cd "$FW" && sha256sum -c --quiet MANIFEST.sha256) || say "  warning: FoxWorx files don't match MANIFEST.sha256"
+  else say "FoxWorx already at $FW — left as is (to update: cp -a $KIT/FoxWorx-DreadFoxHacker/. $FW/)"; fi
   if [ ! -x "$FW/.venv/bin/python" ]; then
     say "installing FoxWorx (its installer prints a one-time setup token — save it)…"
     (cd "$FW" && bash scripts/install.sh) || say "  FoxWorx install failed — rerun: cd $FW && bash scripts/install.sh"
