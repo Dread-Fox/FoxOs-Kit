@@ -5,7 +5,7 @@ recon history and Claude memory. Nothing is shared with, or synced back to, the 
 
 ## Install (on the new Kali box, as your normal user, in a desktop terminal)
 ```bash
-git clone https://github.com/Dread-Fox/foxos-kit.git ~/foxos-kit
+git clone https://github.com/Dread-Fox/FoxOs-Kit.git ~/foxos-kit
 cd ~/foxos-kit && ./install.sh            # --no-rice / --no-timers / --no-rc / --no-foxworx to skip parts
 ```
 It asks for your HackerOne API username and token (stored at `~/.config/hackerone/creds`, chmod 600). Leave them blank
