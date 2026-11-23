@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# FoxWorx desktop launcher: start the workbench if it isn't running, then open it in the browser.
+# Starting goes through the installed systemd user service when there is one; otherwise the server
+# is started directly in the background. Failures are shown in a dialog with the log's last lines.
+set -uo pipefail
+
+ROOT="$HOME/FoxWorx-DreadFoxHacker"
+CONFIG="$HOME/.config/foxworx-workbench/settings.env"
+LOG="$HOME/.local/state/foxworx/launcher.log"
+PY="$ROOT/.venv/bin/python"
+mkdir -p "$(dirname "$LOG")"
+
+fail() {
+  zenity --error --title="FoxWorx" --width=520 --text="$1" 2>/dev/null || notify-send "FoxWorx" "$1"
+  exit 1
+}
+
+port=$(sed -n 's/^FOXWORX_PORT="\{0,1\}\([0-9]*\)"\{0,1\}$/\1/p' "$CONFIG" 2>/dev/null | tail -1)
+port=${port:-8765}
+url="http://127.0.0.1:$port"
+up() { curl -s -o /dev/null --max-time 2 "$url/"; }
+
+if ! up; then
+  [[ -x "$PY" ]] || fail "FoxWorx isn't installed at $ROOT (no .venv)."
+  start=$(wc -l <"$LOG" 2>/dev/null || echo 0)
+  pid=""
+  if systemctl --user cat foxworx-workbench.service >/dev/null 2>&1; then
+    systemctl --user start foxworx-workbench.service
+  else
+    echo "--- $(date -Is) starting FoxWorx" >>"$LOG"
+    cd "$ROOT" && setsid "$PY" -m foxworx.cli serve --config "$CONFIG" >>"$LOG" 2>&1 < /dev/null &
+    pid=$!
+  fi
+  notify-send -i "$HOME/h1/assets/foxworx-icon.png" "FoxWorx" "Starting the workbench…" 2>/dev/null
+  for _ in $(seq 1 40); do
+    up && break
+    # stop waiting as soon as the server has exited (e.g. a configuration error)
+    if [[ -n "$pid" ]] && ! kill -0 "$pid" 2>/dev/null; then break; fi
+    if [[ -z "$pid" ]] && systemctl --user is-failed --quiet foxworx-workbench.service; then break; fi
+    sleep 0.5
+  done
+  if ! up; then
+    if [[ -n "$pid" ]]; then
+      detail=$(tail -n +"$((start + 1))" "$LOG" | tail -n 8)      # this attempt only
+    else
+      detail=$(journalctl --user -u foxworx-workbench -n 8 --no-pager -o cat 2>/dev/null)
+    fi
+    detail=$(printf '%s' "$detail" | sed 's/&/\&amp;/g; s/</\&lt;/g; s/>/\&gt;/g')
+    fail "FoxWorx didn't start.\n\n<tt>$detail</tt>\n\nFull log: $LOG"
+  fi
+fi
+
+xdg-open "$url" >/dev/null 2>&1 &

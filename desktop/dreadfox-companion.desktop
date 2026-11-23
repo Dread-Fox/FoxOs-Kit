@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DreadFox Companion
+GenericName=Evolving kitsune companion
+Comment=DreadFox desktop companion — an evolving nine-tailed kitsune
+Exec=/usr/bin/python3 -I @HOME@/h1/dreadfox_widget.py
+Icon=@HOME@/h1/assets/dreadfox-icon.png
+Terminal=false
+Categories=Network;Security;
+StartupWMClass=Tk

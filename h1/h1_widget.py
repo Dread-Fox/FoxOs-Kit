@@ -10,6 +10,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import messagebox, simpledialog, ttk
 
@@ -56,6 +57,7 @@ class Radar(tk.Tk):
         self._build()
         self.reload()
         self.after(RELOAD_MS, self.tick)
+        self.after(500, self.poll_progress)
 
     # ------------------------------------------------------------------ styling
     def _style(self):
@@ -80,6 +82,8 @@ class Radar(tk.Tk):
         s.configure("TEntry", fieldbackground=PANEL, foreground=TXT, insertcolor=HOT, padding=5)
         s.configure("Vertical.TScrollbar", background=PANEL2, arrowcolor=DIM, troughcolor=PANEL)
         s.configure("TPanedwindow", background=BG)
+        s.configure("Fox.Horizontal.TProgressbar", background=CRIMSON, troughcolor=PANEL, bordercolor=LINE,
+                    lightcolor=HOT, darkcolor=CRIMSON, thickness=10)
 
     # ------------------------------------------------------------------- layout
     def _build(self):
@@ -121,8 +125,24 @@ class Radar(tk.Tk):
         self.status = tk.StringVar()
         tk.Label(bar_, textvariable=self.status, bg=BG, fg=DIM, font=(UI[0], 9)).pack(side="right", padx=12)
 
+        # sync progress row: hidden unless a sync (timer, widget or shell) is running
+        self.prog = tk.Frame(self, bg=BG)
+        tk.Label(self.prog, text="SYNC", bg=BG, fg=CRIMSON, font=(UI[0], 8, "bold")).pack(side="left")
+        self.prog_txt = tk.StringVar()
+        tk.Label(self.prog, textvariable=self.prog_txt, bg=BG, fg=STEEL, font=(UI[0], 9), width=44,
+                 anchor="w").pack(side="left", padx=(8, 8))
+        self.prog_pct = tk.StringVar()
+        tk.Label(self.prog, textvariable=self.prog_pct, bg=BG, fg=TXT, font=(UI[0], 9, "bold"),
+                 width=6, anchor="e").pack(side="right")
+        self.prog_bar = ttk.Progressbar(self.prog, style="Fox.Horizontal.TProgressbar", maximum=100)
+        self.prog_bar.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.prog_shown = False
+        self.prog_mode = None
+        self._svc_cache = (0.0, False)
+
         pw = ttk.Panedwindow(self, orient="horizontal")
         pw.pack(fill="both", expand=True, padx=14, pady=6)
+        self.pw = pw
 
         left = tk.Frame(pw, bg=BG)
         cols = ("rank", "score", "bar", "program", "web", "wild", "sev", "paid", "median", "flags")
@@ -391,6 +411,10 @@ class Radar(tk.Tk):
     def sync(self):
         if self.syncing:
             return
+        self._svc_cache = (0.0, False)  # force a fresh systemd check
+        if L.read_progress() is not None or self._service_running():
+            self.status.set("a sync is already running — watch the bar below")
+            return
         self.syncing = True
         self.sync_btn.state(["disabled"])
         self.status.set("syncing with HackerOne… (programs → scopes → payouts)")
@@ -428,6 +452,59 @@ class Radar(tk.Tk):
             parts.append(f"next auto-sync {m.group(1)}" if m else "auto-sync timer OFF — widget will self-sync")
         self.status.set(" · ".join(parts))
 
+    # ------------------------------------------------------------ sync progress
+    def _service_running(self):
+        """Is the systemd sync running? Cached for 5s so the 1s poll stays cheap."""
+        t, val = self._svc_cache
+        if time.time() - t > 5:
+            out = subprocess.run(["systemctl", "--user", "is-active", "h1-sync.service"],
+                                 capture_output=True, text=True).stdout.strip()
+            val = out in ("activating", "active")
+            self._svc_cache = (time.time(), val)
+        return val
+
+    def _set_prog_mode(self, mode):
+        if mode == self.prog_mode:
+            return
+        self.prog_bar.stop()
+        self.prog_bar.configure(mode=mode)
+        if mode == "indeterminate":
+            self.prog_bar.start(15)
+        self.prog_mode = mode
+
+    def poll_progress(self):
+        try:
+            st = L.read_progress()
+            running = st is not None or self.syncing or self._service_running()
+            if running:
+                if not self.prog_shown:
+                    self.prog.pack(fill="x", padx=14, pady=(2, 0), before=self.pw)
+                    self.prog_shown = True
+                if st:
+                    self._set_prog_mode("determinate")
+                    self.prog_bar["value"] = st.get("pct", 0)
+                    ph, done, total, note = st["phase"], st.get("done", 0), st.get("total", 0), st.get("note", "")
+                    step = {"programs": "1/4 programs", "scopes": "2/4 scopes", "payouts": "3/4 payouts",
+                            "scoring": "4/4 scoring"}.get(ph, ph)
+                    count = f" {done}/{total}" if total and ph in ("scopes", "payouts") else ""
+                    self.prog_txt.set(f"{step}{count}" + (f" · {note}" if note else ""))
+                    self.prog_pct.set(f"{st.get('pct', 0):.0f}%")
+                else:  # running, but the writer predates progress reporting (or hasn't started yet)
+                    self._set_prog_mode("indeterminate")
+                    self.prog_txt.set("running… (waiting for progress data)")
+                    self.prog_pct.set("")
+            elif self.prog_shown:
+                self.prog_bar.stop()
+                self.prog_mode = None
+                self.prog.pack_forget()
+                self.prog_shown = False
+                self._svc_cache = (0.0, False)
+                self.reload(keep=True)  # pick up the freshly landed sync right away
+                self.update_status()
+        except Exception:  # noqa: BLE001 - progress is cosmetic
+            pass
+        self.after(1000, self.poll_progress)
+
     def tick(self):
         """Live reload when the timer (or another shell) lands a sync; self-sync if no timer is running."""
         try:
@@ -439,7 +516,8 @@ class Radar(tk.Tk):
             self.update_status()
             age = L.days_ago(last) if last else None
             timer = subprocess.run(["systemctl", "--user", "is-active", "--quiet", "h1-sync.timer"]).returncode == 0
-            if not timer and not self.syncing and (age is None or age * 1440 > AUTOSYNC_MIN):
+            busy = self.syncing or L.read_progress() is not None or self._service_running()
+            if not timer and not busy and (age is None or age * 1440 > AUTOSYNC_MIN):
                 self.sync()
         except Exception as e:  # noqa: BLE001
             self.status.set(f"refresh error: {e}")

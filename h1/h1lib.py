@@ -127,6 +127,44 @@ def now():
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+# ------------------------------------------------------------- sync progress
+# A running sync writes data/sync_progress.json so the Radar can draw a live progress bar.
+PROGRESS_PATH = os.path.join(DATA, "sync_progress.json")
+# share of the overall bar each phase owns (programs, scopes, payouts, scoring)
+PHASES = {"programs": (0.00, 0.05), "scopes": (0.05, 0.75), "payouts": (0.80, 0.17), "scoring": (0.97, 0.03)}
+
+
+def progress(phase, done=0, total=0, note=""):
+    """Record sync progress atomically. phase='done' / 'failed' marks the end."""
+    base, span = PHASES.get(phase, (1.0, 0.0))
+    frac = min(1.0, base + span * (done / total if total else 0)) if phase in PHASES else 1.0
+    st = {"phase": phase, "done": done, "total": total, "note": note, "pct": round(frac * 100, 1),
+          "pid": os.getpid(), "updated": time.time()}
+    try:
+        tmp = PROGRESS_PATH + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(st, f)
+        os.replace(tmp, PROGRESS_PATH)
+    except OSError:
+        pass  # progress is cosmetic; never break a sync over it
+
+
+def read_progress():
+    """Progress of a sync that is running right now, or None."""
+    try:
+        with open(PROGRESS_PATH) as f:
+            st = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if st.get("phase") in ("done", "failed"):
+        return None
+    try:
+        os.kill(int(st["pid"]), 0)  # writer still alive?
+    except (OSError, KeyError, ValueError, TypeError):
+        return None
+    return st
+
+
 def parse_ts(s):
     if not s:
         return None
@@ -166,12 +204,16 @@ def log_change(c, kind, handle, detail):
 # -------------------------------------------------------------------------- sync
 def sync_programs(c, cl, log=print):
     ts = now()
-    first_run = c.execute("SELECT COUNT(*) FROM programs").fetchone()[0] == 0
+    known = c.execute("SELECT COUNT(*) FROM programs").fetchone()[0]
+    first_run = known == 0
     seen = 0
+    progress("programs", 0, known or 600, "listing programs")
     for p in cl.paginate("/hackers/programs"):
         a = p["attributes"]
         h = a["handle"]
         seen += 1
+        if seen % 100 == 0:
+            progress("programs", seen, max(seen, known or 600), f"{seen} programs listed")
         old = c.execute("SELECT * FROM programs WHERE handle=?", (h,)).fetchone()
         row = dict(
             handle=h, id=p["id"], name=a.get("name"), submission_state=a.get("submission_state"),
@@ -206,6 +248,7 @@ def sync_programs(c, cl, log=print):
 def sync_scopes(c, cl, handles, log=print):
     first_run = meta_get(c, "scopes_initialized") is None
     for i, h in enumerate(handles, 1):
+        progress("scopes", i - 1, len(handles), h)
         ts = now()
         try:
             items = list(cl.paginate(f"/hackers/programs/{urllib.parse.quote(h)}/structured_scopes"))
@@ -262,7 +305,10 @@ def _hacktivity_pages(cl, pages):
 def sync_payouts(c, cl, pages=150, log=print):
     """Pull recently disclosed, paid hacktivity to estimate what each program actually pays."""
     n = 0
-    for it in _hacktivity_pages(cl, pages):
+    progress("payouts", 0, pages, "paid disclosures")
+    for k, it in enumerate(_hacktivity_pages(cl, pages)):
+        if k % 10 == 0:  # pages are 10 items each
+            progress("payouts", k // 10, pages, f"page {k // 10 + 1}")
         a = it["attributes"]
         prog = ((it.get("relationships") or {}).get("program") or {}).get("data") or {}
         h = (prog.get("attributes") or {}).get("handle")
@@ -280,6 +326,16 @@ def sync_payouts(c, cl, pages=150, log=print):
 
 
 def full_sync(scopes="bounty", payout_pages=150, log=print):
+    try:
+        new = _full_sync(scopes, payout_pages, log)
+    except BaseException as e:
+        progress("failed", note=str(e)[:200])
+        raise
+    progress("done")
+    return new
+
+
+def _full_sync(scopes, payout_pages, log):
     c, cl = db(), Client()
     t0 = time.time()
     before = c.execute("SELECT COALESCE(MAX(id),0) FROM changes").fetchone()[0]
@@ -293,6 +349,7 @@ def full_sync(scopes="bounty", payout_pages=150, log=print):
         sync_scopes(c, cl, handles, log)
     if payout_pages:
         sync_payouts(c, cl, payout_pages, log)
+    progress("scoring", 0, 1, "ranking programs")
     n = compute_scores(c)
     meta_set(c, "last_sync", now())
     c.commit()

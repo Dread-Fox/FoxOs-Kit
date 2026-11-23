@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=FoxWorx
+GenericName=DreadFox Kali workbench
+Comment=Start the FoxWorx-DreadFoxHacker workbench and open it in the browser
+Exec=@HOME@/.local/bin/foxworx-launch
+Icon=@HOME@/h1/assets/foxworx-icon.png
+Terminal=false
+Categories=Network;Security;System;
