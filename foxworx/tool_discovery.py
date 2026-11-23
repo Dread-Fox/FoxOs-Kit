@@ -116,7 +116,7 @@ class ToolDiscovery:
         self._snapshot=None;self._metadata={};self._generation=0
         self._instance=secrets.token_hex(8)
         self._lock=threading.RLock();self._stop=threading.Event();self._thread=None
-        self._last_attempt=0.;self._refresh_error=False
+        self._last_attempt=float("-inf");self._refresh_error=False
 
     def rebuild(self,metadata=None):
         with self._lock:
