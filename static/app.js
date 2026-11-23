@@ -407,7 +407,9 @@ async function refreshAdapterPolicy(){
 function updateRabbitExecutionMode(reset=true){
   const cli=$('rabbit-execution-mode').value==='installed_cli';
   const caps=S.rabbitPolicy||{};
-  if(reset){$('rabbit-steps').value=String(Math.min(cli?64:8,caps.max_steps||16));$('rabbit-minutes').value=String(Math.min(cli?60:15,caps.max_minutes||30));}
+  // CLI runs default to the administrator ceiling: the agent stops itself when solved or blocked.
+  $('rabbit-steps').max=String(caps.max_steps||16);$('rabbit-minutes').max=String(caps.max_minutes||30);
+  if(reset){$('rabbit-steps').value=String(cli?(caps.max_steps||64):Math.min(8,caps.max_steps||16));$('rabbit-minutes').value=String(cli?(caps.max_minutes||60):Math.min(15,caps.max_minutes||30));}
   $('rabbit-execution-note').textContent=cli
     ?'The agent may construct commands for installed noninteractive tools under this run grant. Commands have the Linux service account’s file and network access; target scope is not a sandbox.'
     :'Selected workflows use administrator-reviewed command templates.';

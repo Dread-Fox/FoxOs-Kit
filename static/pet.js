@@ -2,37 +2,12 @@
    Only a separately enabled coarse seven-day workbench pulse is available. */
 (function () {
   'use strict';
-  const ns = 'http://www.w3.org/2000/svg';
   const categories = [
     ['exploration', '✦', 'Exploration'],
     ['craft', '⚒', 'Craft'],
     ['wisdom', '✧', 'Wisdom'],
     ['stewardship', '◇', 'Careful practice']
   ];
-  function svg(name, attrs) {
-    const element = document.createElementNS(ns, name);
-    Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
-    return element;
-  }
-  function drawTails(count, target) {
-    target.replaceChildren();
-    const n = Math.min(9, Math.max(1, count));
-    for (let i = 0; i < n; i++) {
-      // Fan out behind the fox, with larger, curved, glowing tails as it ages.
-      const angle = n === 1 ? 1.0 : (-1.26 + i * (2.52 / (n-1)));
-      const tipx = 195 + Math.sin(angle) * 156;
-      const tipy = 163 - Math.cos(angle) * 149;
-      const bulgex = 195 + Math.sin(angle) * 118;
-      const bulgey = 157 - Math.cos(angle) * 112;
-      const offset = 13;
-      const d = `M 187 234 Q ${bulgex-22} ${bulgey+48} ${tipx} ${tipy}` +
-        ` Q ${bulgex+offset+28} ${bulgey+56} 208 235 Z`;
-      const group = svg('g', {'class':'spirit-tail', 'style':`--tail-order:${i};`});
-      group.append(svg('path', {'d':d, 'fill':'url(#tail-paint)', 'stroke':'#8d4c64', 'stroke-width':'2.3'}));
-      group.append(svg('circle', {'cx':tipx, 'cy':tipy, 'r':4+(n>=6?1:0), 'fill':'#ffeac0', 'opacity':'.85'}));
-      target.append(group);
-    }
-  }
   function formatSeconds(seconds) {
     if (!seconds) return '';
     if (seconds >= 3600) return Math.ceil(seconds/3600)+'h';
@@ -64,7 +39,7 @@
       set('mood-bubble',`${model.mood} · ${model.mood==='Dreaming'?'☾':'✧'}`);
       el('scene').dataset.mood=model.mood.toLowerCase();
       el('portrait').setAttribute('aria-label',`${model.name}, a ${model.mood.toLowerCase()} fox spirit with ${model.tails} tail${model.tails===1?'':'s'}`);
-      drawTails(model.tails,$('fox-tails'));
+      if (window.DreadFoxArt) window.DreadFoxArt.render(el('portrait'), model);
       set('next-tail',model.next_tail?`Next tail: ${model.next_tail.xp} XP and ${model.next_tail.days} days of companionship.`:'All nine tails awakened. Your story continues.');
       set('quote',model.tracking?`Day ${model.age_days} together · ${model.today_xp}/${model.daily_cap} daily XP earned`:'Growth paused · memories preserved');
       el('tracking').checked=!!model.tracking;

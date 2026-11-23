@@ -30,6 +30,8 @@ Default file: `~/.config/foxworx-workbench/settings.env`. Use `bash scripts/conf
 | FOXWORX_RESERVE_MIB | New ARM64 default `256`; new x86-64 default `1024`; minimum free space before a managed job starts. Not a live disk quota. |
 | FOXWORX_EXTRA_TOOL_PATHS | Colon-separated additional absolute executable directories, e.g. `/home/foxoperator/go/bin`. Restart then Refresh. |
 | FOXWORX_SHELL | `/bin/bash`; an installed executable interactive shell. Its startup files may affect behavior. |
+| FOXWORX_COMPANION_FILE | Empty (off). Path of the desktop DreadFox widget state file, normally `~/h1/data/pet.json`. Only aggregate pet/memory values are written. |
+| FOXWORX_COMPANION_OWNER | Operator id whose pet is exported to the desktop widget (for example `local-operator`). |
 
 Session limits: server-side sessions of 8 hours (optional 7-day remembered device), revocable on sign-out, password change, operator removal and token rotation; at most 20 concurrent sessions per operator; sign-in throttled at 8 failures per client or name per 15 minutes; pending proposal 10 minutes; ticket 30 seconds/one use; socket reauthentication at most 15 minutes; detached terminal expiry 1 hour; PTY replay 256 KiB; up to 128 output messages per connected browser; paste/input at most 16 KiB per frame; upload 10 MiB; export 64 MiB uncompressed; 1,000 listed workspace files; 10,000 exported jobs; 200 recent jobs/proposals per view; 60 displayed chat messages; 12 prior messages used for AI history. AI context may include the explicitly opted-in last 12 KB of a selected job.
 

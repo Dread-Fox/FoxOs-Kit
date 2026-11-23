@@ -14,7 +14,7 @@ def test_port_defaults_and_local_login_no_cloudflare(cfg):
     assert cfg.bind_host == '127.0.0.1'
     cfg.validate()
     with TestClient(create_app(cfg,_allow_root_for_tests=True),base_url=cfg.origin,client=('127.0.0.1',45678)) as c:
-        assert c.get('/api/auth-mode').json()=={'mode':'local','version':'3.4.0','public_origin':'','login':True}
+        assert c.get('/api/auth-mode').json()=={'mode':'local','version':'3.5.0','public_origin':'','login':True}
         assert c.get('/api/session').status_code==401
         assert c.post('/api/login',json={'token':cfg.local_token},headers={'Origin':cfg.origin}).status_code==200
         assert c.get('/api/session').json()['actor']=='local-operator'
@@ -82,7 +82,7 @@ def test_proxy_auth_requires_exact_https_origin_and_local_origin_service(cfg):
 
 def test_new_version_printed_without_network_config(capsys):
     assert main(['version'])==0
-    assert capsys.readouterr().out.strip()=='3.4.0'
+    assert capsys.readouterr().out.strip()=='3.5.0'
 
 
 def test_local_service_issues_token_when_login_secret_missing(tmp_path, monkeypatch, capsys):

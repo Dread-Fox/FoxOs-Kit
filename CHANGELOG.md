@@ -1,3 +1,33 @@
+## v3.5.0 — DreadFox redesign, desktop companion, Zenko memory and local LM Studio models
+
+All v3.4.0 behaviour, security controls and APIs are unchanged; everything below is additive or opt-in.
+
+### DreadFox art redesign
+- New `static/fox-art.js` draws the sanctuary portrait from the DreadFox redesign: nine evolution stages (1 to 9 tails, per-stage palette and forehead marks, orbiting spirit orbs) and eight moods with their own eyes and effects. Each render uses unique gradient ids.
+- `static/pet.js` delegates the portrait to `DreadFoxArt.render`; the old inline SVG and `drawTails` helper are removed. New CSS animations: `fx-sway`, `fx-orb`, `fx-twinkle`, `fx-shake`, `fx-zzz` (respect `prefers-reduced-motion`).
+
+### One pet, three views (web sanctuary, pet chat, desktop widget)
+- `DreadFoxPet.mood_source`: optional hook merged into every hatched snapshot so the sanctuary, pet chat and desktop widget show one mood. Failures fall back to the care-based mood.
+- `DreadFoxPet.on_change`: optional best-effort hook after any pet change. Failures are logged and never affect the workbench.
+- New `foxworx/companion_bridge.py`: derives a memory-driven mood (wary after a blocked Rabbit Hole command, determined, remembering, confident, frustrated, dreaming) and atomically writes an allow-listed state file for the FoxOS desktop widget (`FOXWORX_COMPANION_FILE`, `FOXWORX_COMPANION_OWNER`). Only numbers, timestamps, mood words and the pet name are exported; lesson text, targets, commands and output never are. CLI: `python -m foxworx.companion_bridge --owner ID --file PATH`.
+- Snapshots now include `last_active_at`.
+- New pet activities: `zenko-lesson-learned` (wisdom), `zenko-engagement-completed` (craft), `zenko-memory-consolidated` (stewardship). `rabbit-command-blocked` is observed without XP so the companion can turn wary.
+
+### Zenko self-improving memory
+- New `foxworx/zenko_memory.py`: episodic capture and distilled lessons stored actor-bound in the records store, recalled by in-process cosine similarity weighted by outcome, consolidated to merge duplicates and stay bounded. `vitals()` exposes aggregate counters only. Embeddings come from a loopback LM Studio server (`nomic-embed-text-v1.5`); an Ollama embedder is also provided.
+
+### AI modes and Rabbit Hole
+- Copilot modes renamed in the UI: **Chat** (answers and explains, never runs anything), **Copilot** (proposes commands, you approve each one), **Rabbit Hole** (keeps adapting until solved or blocked). Mode values are unchanged.
+- Rabbit Hole: parameters sent to a fixed built-in workflow now return feedback to the model instead of aborting the run (two in a row still stop it). Only consecutive invalid decisions end a run; the counter resets whenever a command launches.
+- Installed-CLI runs default to the administrator policy ceiling (`max_steps` / `max_minutes`); the inputs are capped at those ceilings.
+- New example policy `policy/adapter-policy.v3.all-builtins.example.json` (installed CLI plus all 17 built-in workflows, 500 decisions / 480 minutes).
+
+### Local abliterated models (LM Studio)
+- Documented LM Studio 0.4.x as the local inference server for Zenko on a multi-GPU desktop, using the built-in `lmstudio-local` endpoint (`http://127.0.0.1:1234/v1`). See docs/AI-PROVIDERS.md.
+
+### Tests
+- New `tests/test_companion_bridge.py`, `tests/test_zenko_memory.py`; two new Rabbit Hole tests. `tests/conftest.py` now points the adapter policy at a temp path so tests never read the host's `/etc/foxworx` policy.
+
 ## v3.4.0 — Authentication by default and Rabbit Hole guardrails
 
 ### Security: authentication on by default (critical)

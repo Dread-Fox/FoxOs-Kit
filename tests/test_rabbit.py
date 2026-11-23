@@ -390,3 +390,30 @@ def test_read_only_documentation_accepts_case_sensitive_installed_executable_nam
         answer={'content':'','calls':[{'id':'c1','name':'inspect_tool','arguments':json.dumps({'name':name})}]}
         action,data=_decision(answer)
         assert action=='inspect_tool' and data['name']==name
+
+
+@pytest.mark.asyncio
+async def test_parameters_to_fixed_workflow_get_feedback_not_a_halt(setup, engagement, monkeypatch):
+    runner,jobs,gateway=setup
+    with_params={'content':'','calls':[{'id':'c1','name':'choose_workflow','arguments':json.dumps(
+        {'profile':'tcp-connect','reason':'scan a range','parameters':{'ports':'8700-8800'}})}]}
+    gateway.replies=[with_params,tool_choice('tcp-connect'),finish('solved','Found the service','Review evidence')]
+    async def pretend_wait(owner,jid,deadline,run_id): return {'id':jid,'status':'succeeded','returncode':0}
+    monkeypatch.setattr(runner,'_wait_job',pretend_wait)
+    ended=await settle(runner.store,runner,runner.start(OWNER,grant(engagement))['id'])
+    assert ended['status']=='solved'
+    assert jobs.commands==['tcp-connect']               # the parameterised attempt never ran
+    assert any('takes no parameters' in str(call[1]) for call in gateway.requests[1:])
+
+
+@pytest.mark.asyncio
+async def test_only_consecutive_invalid_decisions_end_a_run(setup, engagement, monkeypatch):
+    runner,jobs,gateway=setup
+    # invalid, valid, invalid, valid, finish: two mistakes in total but never two in a row
+    gateway.replies=[tool_choice('whois'),tool_choice('http-headers'),tool_choice('whois'),
+                     tool_choice('tcp-connect'),finish('solved','Done','Review evidence')]
+    async def pretend_wait(owner,jid,deadline,run_id): return {'id':jid,'status':'succeeded','returncode':0}
+    monkeypatch.setattr(runner,'_wait_job',pretend_wait)
+    ended=await settle(runner.store,runner,runner.start(OWNER,grant(engagement,max_steps=8))['id'])
+    assert ended['status']=='solved'
+    assert jobs.commands==['http-headers','tcp-connect']

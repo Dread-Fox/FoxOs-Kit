@@ -1,4 +1,4 @@
-# FOXWORX Kali Workbench · v3.4.0
+# FOXWORX Kali Workbench · v3.5.0
 
 [![CI](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
@@ -158,7 +158,7 @@ Read the [operator guide](docs/OPERATOR-GUIDE.md) for the full workflow.
 
 ## AI modes and optional integrations
 
-**Tutor** provides explanations and read-oriented assistance. **Copilot** can prepare managed command proposals; execution requires an operator's explicit approval. **Rabbit Hole** discovers tools, checks results and tries alternatives automatically after one initial task authorization. Choose selected administrator workflows or, with an enabled schema-3 policy, installed CLI tools with model-constructed arguments. In installed CLI mode, guardrails check every model-constructed command before it runs: each host, IP, CIDR and URL argument must be in the engagement scope, and shells, destructive or privileged tools, scope-bypassing options and credential paths are blocked. Every autonomous command is audited. This is argument-level enforcement, **not an OS sandbox** (see [limits](docs/RABBIT-HOLE.md#why-this-is-not-a-sandbox-known-limits)). Follow-up prompts steer the active task while its targets and finite budget stay fixed. Rabbit Hole requires a separately installed administrator policy.
+**Chat** (formerly Tutor) answers and explains and never runs anything. **Copilot** can prepare managed command proposals; execution requires an operator's explicit approval. **Rabbit Hole** discovers tools, checks results and tries alternatives automatically after one initial task authorization. Choose selected administrator workflows or, with an enabled schema-3 policy, installed CLI tools with model-constructed arguments. In installed CLI mode, guardrails check every model-constructed command before it runs: each host, IP, CIDR and URL argument must be in the engagement scope, and shells, destructive or privileged tools, scope-bypassing options and credential paths are blocked. Every autonomous command is audited. This is argument-level enforcement, **not an OS sandbox** (see [limits](docs/RABBIT-HOLE.md#why-this-is-not-a-sandbox-known-limits)). Follow-up prompts steer the active task while its targets and finite budget stay fixed. Rabbit Hole requires a separately installed administrator policy.
 
 **Large tool inventories:** The backend ranks installed tools using names, descriptions and local package/manual metadata. Agents receive at most 10 relevant candidates, then can refine filters or page through more matches. There is no fixed inventory-count ceiling; synthetic tests cover up to 50,000 entries. Inventory refresh runs in the background when stale, and manual Refresh remains available. See [tool discovery](docs/TOOL-DISCOVERY.md).
 
@@ -178,7 +178,8 @@ Use the dedicated setup guides:
 - [Rabbit Hole authorization and limits](docs/RABBIT-HOLE.md)
 - [Administrator tool policy](docs/ADAPTER-POLICY.md) and [CLI adapters](docs/CLI-ADAPTERS.md)
 - [Discord team setup and sharing](docs/DISCORD-TEAM.md)
-- [DreadFox companion and privacy controls](docs/DREADFOX.md)
+- [DreadFox companion and privacy controls](docs/DREADFOX.md) — includes the v3.5.0 redesign and the FoxOS desktop widget
+- [LM Studio with local abliterated models](docs/AI-PROVIDERS.md#lm-studio-with-local-abliterated-models-zenko)
 
 ## Remote access and team deployments
 

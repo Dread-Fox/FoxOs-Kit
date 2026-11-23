@@ -36,6 +36,7 @@ from .evidence import safe_open, list_files, export_evidence, MAX_UPLOAD
 from .platforms import host_snapshot
 from .hardware_intelligence import HardwareIntelligence
 from .pet import DreadFoxPet
+from .companion_bridge import CompanionBridge, companion_mood
 from .pet_chat import DreadFoxConversation
 
 
@@ -102,6 +103,15 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         logging.getLogger(__name__).exception('DreadFox storage unavailable; workbench remains operational')
         pet = None
 
+    if pet is not None:
+        # One mood everywhere: the sanctuary, the pet chat and the desktop widget all read it.
+        pet.mood_source = lambda owner, snap, when: companion_mood(store, owner, snap, when)
+    bridge = None
+    if pet is not None and cfg.companion_file:
+        # Desktop widget export (aggregates only); never allowed to affect the workbench.
+        bridge = CompanionBridge(pet, store, Path(cfg.companion_file).expanduser(), owner=cfg.companion_owner)
+        pet.on_change = bridge.refresh
+
     try:
         pet_chat = DreadFoxConversation(pet, providers, ai.gateway) if pet is not None else None
     except Exception:
@@ -127,6 +137,8 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         rabbit.recover()
         await discord.start()
         if pet is not None: pet.start()
+        if bridge is not None and cfg.companion_owner:
+            await asyncio.to_thread(bridge.refresh, cfg.companion_owner)
         terminals.reaper = asyncio.create_task(terminals.reap())
         yield
         await discord.shutdown()

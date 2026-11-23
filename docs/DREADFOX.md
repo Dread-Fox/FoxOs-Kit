@@ -123,3 +123,11 @@ Each stored database row has only: `owner`, current pet-generation identifier, *
 - Workbench Pulse does **not** inspect processes, instrument terminal commands, grade vulnerabilities or evaluate user competence. It is a playful abstract activity summary only.
 
 Endpoints: `GET /api/pet/context`, `PUT /api/pet/context` with `{ "enabled": true/false }`, and `DELETE /api/pet/context`. Mutations require the normal authenticated CSRF context. The ordinary FOXWORX audit subsystem is not modified.
+
+## v3.5.0 — redesign and desktop companion
+
+- The sanctuary portrait is drawn by `static/fox-art.js` from the DreadFox redesign: nine stages (one tail per stage) and eight moods.
+- **One pet, three views.** The sanctuary, the pet chat and the FoxOS desktop widget (`~/h1/dreadfox_widget.py`, installed by foxos-kit) share one mood. `foxworx/companion_bridge.py` adds memory-driven moods from Zenko vitals: *wary* for 15 minutes after a blocked Rabbit Hole command, then determined, remembering, confident, frustrated or dreaming.
+- **Desktop export (opt-in).** Set `FOXWORX_COMPANION_FILE=~/h1/data/pet.json` and `FOXWORX_COMPANION_OWNER=<operator id>` in `settings.env`. The file is written atomically from an allow-list: numbers, timestamps, mood words, built-in narration and the pet name. Lesson text, episodes, targets, commands, tool output and audit details are never read into it.
+- The widget's TALK window uses `/api/pet/chat` and the copilot API with the normal session and CSRF headers; it works without a browser sign-in only in open mode.
+- Zenko memory milestones grant XP: `zenko-lesson-learned`, `zenko-engagement-completed`, `zenko-memory-consolidated`.

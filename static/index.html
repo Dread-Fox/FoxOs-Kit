@@ -4,7 +4,7 @@
 <title>FOXWORX · Kali Workbench</title>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="/static/vendor/xterm.css"><link rel="stylesheet" href="/static/app.css">
-<script defer src="/static/pet.js"></script><script type="module" src="/static/app.js"></script></head>
+<script defer src="/static/fox-art.js"></script><script defer src="/static/pet.js"></script><script type="module" src="/static/app.js"></script></head>
 <body>
 <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
 <div id="toast" role="status" hidden></div>
@@ -123,30 +123,7 @@
       <div class="pet-hero">
         <div class="pet-scene" id="pet-scene">
           <div class="pet-stars" aria-hidden="true">✦ <span>·</span> ✧ <span>·</span> ✦</div>
-          <svg id="pet-portrait" class="pet-portrait" role="img" aria-label="An orange fox spirit with glowing tails" viewBox="0 0 390 292" xmlns="http://www.w3.org/2000/svg">
-            <defs><linearGradient id="tail-paint" x1="0" y1="0" x2=".9" y2="1"><stop offset="0" stop-color="#ffd196"/><stop offset=".42" stop-color="#f3864c"/><stop offset="1" stop-color="#b64a66"/></linearGradient>
-              <linearGradient id="fox-paint" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffdb93"/><stop offset=".44" stop-color="#f6a061"/><stop offset="1" stop-color="#b85b6c"/></linearGradient>
-              <radialGradient id="fox-halo"><stop offset="0" stop-color="#f3a86f" stop-opacity=".45"/><stop offset="1" stop-color="#f3a86f" stop-opacity="0"/></radialGradient>
-              <filter id="fox-glow"><feGaussianBlur stdDeviation="3"/></filter>
-            </defs>
-            <ellipse cx="194" cy="161" rx="159" ry="123" fill="url(#fox-halo)"/>
-            <g id="fox-tails"></g>
-            <ellipse cx="196" cy="261" rx="98" ry="12" fill="#0b1328" opacity=".55"/>
-            <path d="M148 180 Q130 206 146 246 Q174 268 196 257 Q217 270 249 247 Q264 204 239 181Z" fill="url(#fox-paint)" stroke="#9c5063" stroke-width="2"/>
-            <path d="M173 203 Q159 232 193 257 Q233 232 219 201Z" fill="#fff2d9" opacity=".95"/>
-            <path d="M153 232 Q136 246 161 256 Q179 261 183 249M240 231 Q261 245 232 257 Q209 260 204 249" fill="#f3a05e" stroke="#d98161" stroke-width="2"/>
-            <path d="M128 126 L127 42 Q159 52 178 96 L210 95 Q234 48 268 42 L264 129Z" fill="url(#fox-paint)" stroke="#a65567" stroke-width="3"/>
-            <path d="M139 103 L139 63 Q157 74 168 100M224 101 Q238 73 255 64 L253 105Z" fill="#aa627b"/>
-            <path d="M128 117 Q143 83 194 86 Q251 83 265 122 Q276 174 235 204 Q207 223 194 214 Q167 227 145 197 Q116 163 128 117Z" fill="url(#fox-paint)" stroke="#a65567" stroke-width="3"/>
-            <path d="M134 148 Q150 161 169 154 Q177 185 194 196 Q215 184 218 154 Q241 160 259 144 Q256 195 224 208 Q198 225 174 211 Q144 203 134 148Z" fill="#fff2d9"/>
-            <path id="fox-eye-left" d="M150 149 Q163 157 176 147" fill="none" stroke="#4a3452" stroke-width="5" stroke-linecap="round"/>
-            <path id="fox-eye-right" d="M213 147 Q227 157 241 147" fill="none" stroke="#4a3452" stroke-width="5" stroke-linecap="round"/>
-            <path d="M187 177 Q195 170 204 177 Q199 188 195 188Z" fill="#61384b"/>
-            <path d="M195 188 Q195 198 185 199 M195 188 Q195 198 205 199" fill="none" stroke="#7c4c58" stroke-width="2.5" stroke-linecap="round"/>
-            <circle cx="143" cy="175" r="12" fill="#f2a8a7" opacity=".65"/><circle cx="246" cy="175" r="12" fill="#f2a8a7" opacity=".65"/>
-            <path d="M184 123 L195 106 L207 123 L195 132Z" fill="#fff3ce"/><circle cx="195" cy="117" r="3" fill="#b75c7c"/>
-            <g id="fox-sparkles" fill="#ffdab0"><path d="M85 128l4 9 9 4-9 4-4 9-4-9-9-4 9-4z"/><path d="M301 107l3 7 7 3-7 3-3 7-3-7-7-3 7-3z"/><circle cx="311" cy="188" r="3"/><circle cx="89" cy="202" r="2"/></g>
-          </svg>
+          <svg id="pet-portrait" class="pet-portrait" role="img" aria-label="Your DreadFox fox spirit" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"></svg>
           <div id="pet-mood-bubble" class="pet-mood-bubble">Content · ✧</div>
         </div>
         <div class="pet-identity"><span class="eyebrow">YOUR FOX SPIRIT</span><h2 id="pet-name">DreadFox</h2><p id="pet-stage">Fox Kit</p>
@@ -190,7 +167,7 @@
     </div>
   </section>
   </main>
-  <aside class="copilot panel" aria-label="AI copilot"><div class="panel-title"><div><span class="eyebrow">EXPLAIN · PROPOSE · REVIEW</span><h2>AI copilot</h2></div><span id="ai-badge" class="badge">Not configured</span></div><div class="copilot-controls"><div class="ai-mode-control"><label for="ai-mode">Mode</label><select id="ai-mode"><option value="tutor">Tutor · explain only</option><option value="copilot" selected>Copilot · prepare proposals</option><option value="rabbit">Rabbit Hole · bounded automatic retries</option></select></div><button id="ai-settings-open" class="tiny" type="button">Provider &amp; model</button><button id="clear-chat" class="tiny">Clear</button></div>
+  <aside class="copilot panel" aria-label="AI copilot"><div class="panel-title"><div><span class="eyebrow">EXPLAIN · PROPOSE · REVIEW</span><h2>AI copilot</h2></div><span id="ai-badge" class="badge">Not configured</span></div><div class="copilot-controls"><div class="ai-mode-control"><label for="ai-mode">Mode</label><select id="ai-mode"><option value="tutor">Chat · answers and explains, never runs anything</option><option value="copilot" selected>Copilot · proposes commands, you approve each one</option><option value="rabbit">Rabbit Hole · keeps adapting until solved or blocked</option></select></div><button id="ai-settings-open" class="tiny" type="button">Provider &amp; model</button><button id="clear-chat" class="tiny">Clear</button></div>
    <div id="ai-setup-note" class="notice">Choose a provider and model using <strong>Provider &amp; model</strong>. For cloud models, save your own API key. Local inference uses an administrator-approved endpoint.</div><div id="ai-selection-label" class="ai-selection-label">No model selected</div>
    <div id="chat-messages" class="chat-messages" aria-live="polite"><div class="chat-empty"><strong>Start with the objective.</strong><p>“Explain the flags in this command.”</p><p>“Prepare an HTTP-header check for an authorized URL.”</p><p>“Help interpret my selected job’s output.”</p></div></div>
    <div id="chat-context" class="chat-context"><label for="ai-job" class="hint">Optional job context</label><select id="ai-job"><option value="">No job selected</option></select><label class="check"><input id="share-output" type="checkbox"> Share this job’s command and last 12 KB of output</label><p class="hint">Off by default. Redaction is best-effort; inspect sensitive output first.</p></div>
@@ -218,7 +195,7 @@
    </section>
    <form id="chat-form" class="chat-composer"><label for="chat-input" class="sr-only">Message to AI copilot</label><textarea id="chat-input" rows="3" placeholder="Describe your objective or ask about a tool…" maxlength="12000"></textarea><div class="composer-footer"><span class="hint">Ctrl+Enter to send</span><button id="send-chat" type="submit" class="primary">Send</button></div><p class="hint privacy-copy">Sending shares your message, engagement scope/notes, matching local tool metadata and same-model chat history with the selected provider. Changing provider does not automatically forward previous chats. No terminal stream is shared automatically.</p></form>
   </aside>
- </div><footer class="app-footer"><span>FOXWORX WORKBENCH v3.4.0</span><span id="operator-label"></span><span>Human-approved commands · bounded Rabbit Hole automation</span></footer>
+ </div><footer class="app-footer"><span>FOXWORX WORKBENCH v3.5.0</span><span id="operator-label"></span><span>Human-approved commands · bounded Rabbit Hole automation</span></footer>
 </div>
 <dialog id="ai-settings-dialog" aria-labelledby="ai-settings-title"><div class="dialog-heading"><div><span class="eyebrow">UNIVERSAL AI ENGINE</span><h2 id="ai-settings-title">Provider &amp; model</h2></div><button type="button" data-close="ai-settings-dialog" aria-label="Close model settings">×</button></div>
 <p class="hint">Choose your provider and model independently of Tutor, Copilot, or Rabbit Hole mode. Cloud requests leave this node; local endpoints must be approved in the Pi configuration. Not all models support tool calls.</p>

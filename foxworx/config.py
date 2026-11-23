@@ -73,6 +73,9 @@ class Settings:
     discord_guild_id: str = ''
     discord_poll_seconds: int = 30
     discord_node_label: str = 'FOXWORX'
+    # Desktop DreadFox widget state file (aggregates only); empty disables the export.
+    companion_file: str = ''
+    companion_owner: str = ''
 
     def validate(self) -> None:
         if bool(self.discord_bot_token) != bool(self.discord_channel_id):
@@ -203,6 +206,8 @@ class Settings:
             discord_guild_id=val('FOXWORX_DISCORD_GUILD_ID'),
             discord_poll_seconds=int(val('FOXWORX_DISCORD_POLL_SECONDS','30')),
             discord_node_label=val('FOXWORX_DISCORD_NODE_LABEL','FOXWORX'),
+            companion_file=val('FOXWORX_COMPANION_FILE'),
+            companion_owner=val('FOXWORX_COMPANION_OWNER'),
         )
         cfg.validate()
         return cfg

@@ -80,6 +80,26 @@ bash scripts/doctor.sh
 
 Afterwards select the named endpoint in **Provider & model**. **Discover models** probes an approved Ollama `/api/tags` or OpenAI-compatible `/v1/models` route without following redirects. Some servers do not support listing; enter the exact ID manually. If your local compatible server requires an API key, save it in the same UI for that provider; no cloud API key will be automatically forwarded to a keyless local compatible server.
 
+## LM Studio with local abliterated models (Zenko)
+
+The same desktop runs FOXWORX and LM Studio; the built-in **lmstudio-local** endpoint (`http://127.0.0.1:1234/v1`) needs no `FOXWORX_AI_ENDPOINTS` entry.
+
+1. Install LM Studio 0.4.x (0.4.28 tested; earlier llama.cpp runtimes cannot load the Qwen3.5-generation `qwen35`/`qwen35moe` architectures).
+2. Download the models into `~/.lmstudio/models` (the FoxOS kit's `zenko/get_models.sh` does this resumably):
+   - `huihui-ai/Huihui-Qwen3.6-35B-A3B-abliterated-MTP-GGUF` Q4_K — main agent model (MoE, about 45 tok/s on 3x RTX 3060 Ti)
+   - `unsloth/Qwen3.8-27B-GGUF` UD-Q4_K_XL — slower, deeper reasoning
+   - `DavidAU/OpenAi-GPT-oss-20b-abliterated-uncensored-NEO-Imatrix-gguf` IQ4_NL — fallback (harmony format; reasoning in `reasoning_content`)
+   - `nomic-ai/nomic-embed-text-v1.5-GGUF` Q8_0 — embeddings for Zenko memory
+3. Start the server and load the main model under the identifier `zenko-main`:
+   ```bash
+   lms server start
+   lms load huihui-qwen3.6-35b-a3b-abliterated-mtp --gpu 0.65 -c 131072 --identifier zenko-main -y
+   ```
+   `--gpu max` at a 128K context runs out of memory when the desktop also uses GPU 0; lower `-c` or raise `--gpu` to suit your cards.
+4. In **Provider & model** choose **LM Studio**, endpoint **lmstudio-local**, model `zenko-main`, then **Use this model**. The pet chat uses the same selection.
+
+These models think before answering: allow at least 4K output tokens when calling them directly. Abliterated models do not refuse tool calls, so scope, approvals and the Rabbit Hole guardrails are what keep runs inside the engagement.
+
 ## Migration from v2.0
 
 Stop the old v2 service *deliberately*, back up engagement evidence and `~/.local/share/foxworx-workbench-v2`, and install v2.4 in its own directory. **The new installer preserves your existing database and configuration** and adds `FOXWORX_AI_ENCRYPTION_KEY` if missing. It does not modify the Kali image or uninstall the old directory. After reinstalling, your existing `OPENAI_API_KEY` plus `OPENAI_MODEL` remain the default unless you select something else. The other providers are configured per operator.

@@ -400,7 +400,13 @@ class RabbitRunner:
                 if not direct:self._require_policy(record,profile)
                 parameters=data.get('parameters',{})
                 if profile in PROFILES and parameters:
-                    raise RuntimeError('Built-in recipes reject AI-supplied parameters')
+                    # Feedback, not a halt: the model can rerun the recipe as-is or switch to a CLI tool.
+                    errors+=1
+                    conversation.append({'model_error':f'{profile} is a fixed built-in workflow and takes no parameters. '
+                        +('To choose ports or options, call run_tool with an installed CLI tool and literal arguments.' if cli
+                          else 'Choose it without parameters, choose another approved workflow, or finish.')})
+                    if errors>=2: raise RuntimeError('The model repeatedly sent parameters to fixed built-in workflows')
+                    continue
                 if not direct and profile not in record['profiles']:
                     errors+=1
                     conversation.append({'model_error':f'{profile} is not in the operator-approved workflows.'})
@@ -459,6 +465,9 @@ class RabbitRunner:
                       'reason':redact(data['reason'])[:160]}
                 if direct:step['tool']=data['name']
                 record['steps'].append(step);self._save(owner,record)
+                # Only CONSECUTIVE invalid decisions end a run; a launched command resets the count, so long
+                # runs keep adapting until the model finishes solved/blocked or the budget runs out.
+                errors=0
                 outcome=await self._wait_job(owner,jid,record['budget_end'],rid)
                 step['status']=outcome['status'];step['returncode']=outcome.get('returncode')
                 self._save(owner,record)

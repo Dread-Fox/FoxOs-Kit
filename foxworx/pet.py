@@ -35,6 +35,11 @@ OPS_CATEGORIES = {
     'engagement-updated': 'workspace_planning',
     'file-uploaded': 'evidence_organization',
     'evidence-exported': 'evidence_organization',
+    'zenko-lesson-learned': 'learning_sessions',
+    'zenko-engagement-completed': 'completed_jobs',
+    'zenko-memory-consolidated': 'learning_sessions',
+    # No XP: admitted only so the companion can turn wary when an action is blocked.
+    'rabbit-command-blocked': 'blocked_actions',
 }
 OPS_DAYS = 7
 OPS_MAX_COUNT = 20
@@ -57,6 +62,9 @@ ACTIVITIES = {
     'engagement-updated': ('stewardship', 3, 300, 'Maintained the workspace plan.'),
     'evidence-exported': ('stewardship', 10, 300, 'Organized and preserved project evidence.'),
     'file-uploaded': ('craft', 5, 300, 'Added an artifact to a workspace.'),
+    'zenko-lesson-learned': ('wisdom', 8, 120, 'Turned experience into a lasting lesson.'),
+    'zenko-engagement-completed': ('craft', 15, 300, 'Reflected on finished work and grew wiser.'),
+    'zenko-memory-consolidated': ('stewardship', 4, 3600, 'Tidied its memories into clearer lessons.'),
 }
 STAGES = (
     ('Fox Kit', 1, 0, 0),
@@ -110,6 +118,13 @@ class DreadFoxPet:
         self.queue: asyncio.Queue | None = None
         self.worker: asyncio.Task | None = None
         self.dropped = 0
+        # Optional best-effort hook ``(owner) -> None`` run after any pet change (e.g. the
+        # desktop companion export). Failures are swallowed; the workbench never depends on it.
+        self.on_change: Callable[[str], None] | None = None
+        # Optional ``(owner, snapshot, when) -> dict`` merged into every hatched snapshot, so the web
+        # sanctuary, the pet chat and the desktop widget all show one mood (see companion_bridge).
+        # It may only add aggregate fields (mood words, numbers, timestamps); failures fall back.
+        self.mood_source: Callable[[str, dict, float], dict] | None = None
         with store.db() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS pet_profiles (
@@ -156,11 +171,24 @@ class DreadFoxPet:
         while True:
             owner, kind, when, generation = await self.queue.get()
             try:
-                await asyncio.to_thread(self.process_event,owner,kind,when,expected_id=generation)
+                await asyncio.to_thread(self._process_and_notify,owner,kind,when,generation)
             except Exception:  # an optional pet should never disrupt the workbench
                 LOG.exception('DreadFox background observer failed')
             finally:
                 self.queue.task_done()
+
+    def _notify(self, owner: str):
+        hook = self.on_change
+        if hook is not None:
+            try:
+                hook(owner)
+            except Exception:  # an optional desktop companion must never disrupt the workbench
+                LOG.exception('DreadFox change hook failed')
+
+    def _process_and_notify(self, owner: str, kind: str, when: float, generation: str):
+        self.process_event(owner,kind,when,expected_id=generation)
+        # Notify even without XP: blocked actions and streaks still change the mood.
+        self._notify(owner)
 
     def observe(self, owner: str, kind: str, details: str = '') -> bool:
         """Only dispatch bounded generic action names. Never store/copy details."""
@@ -200,6 +228,7 @@ class DreadFoxPet:
                 self._memory(db,owner,at,'hatch','A little fox spirit hatched into your workbench.')
         if pet.get('tracking'):
             self.active[owner]=pet['id']
+        self._notify(owner)
         return self.snapshot(owner)
 
     def process_event(self, owner: str, kind: str, at: float | None = None,
@@ -328,6 +357,7 @@ class DreadFoxPet:
             p['last_changed_at']=_utc(at)
             self._save(db,owner,p)
             self._memory(db,owner,at,'care',rule['note'])
+        self._notify(owner)
         return self.snapshot(owner)
 
     def rename(self,owner: str,name: str) -> dict:
@@ -340,6 +370,7 @@ class DreadFoxPet:
             if p is None: raise ValueError('Hatch your DreadFox first')
             p['name']=name
             self._save(db,owner,p)
+        self._notify(owner)
         return self.snapshot(owner)
 
     def tracking(self,owner: str, enabled: bool) -> dict:
@@ -351,6 +382,7 @@ class DreadFoxPet:
             self._save(db,owner,p)
         if enabled: self.active[owner]=p['id']
         else: self.active.pop(owner,None)
+        self._notify(owner)
         return self.snapshot(owner)
 
     def delete(self,owner: str):
@@ -362,9 +394,20 @@ class DreadFoxPet:
             db.execute('DELETE FROM pet_operation_days WHERE owner=?',(owner,))
             if db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='pet_conversations'").fetchone():
                 db.execute('DELETE FROM pet_conversations WHERE owner=?',(owner,))
+        self._notify(owner)
 
     def snapshot(self, owner: str, at: float | None = None) -> dict:
         when=at if at is not None else self.clock()
+        snap=self._snapshot(owner, when)
+        source=self.mood_source
+        if source is not None and snap.get('hatched'):
+            try:
+                snap={**snap, **source(owner, snap, when)}
+            except Exception:  # the care-based mood stays if the memory signal is unavailable
+                LOG.exception('DreadFox mood source failed')
+        return snap
+
+    def _snapshot(self, owner: str, when: float) -> dict:
         with self.store.db() as db:
             p=self._load(db,owner)
             if p is None:
@@ -394,7 +437,7 @@ class DreadFoxPet:
                 'stage':stage,'tails':tails,'age_days':age_days,'level':level,'xp':p['xp'],
                 'xp_level_start':20*(level-1)**2, 'xp_next':20*level**2,
                 'energy':energy, 'bond':p['bond'], 'curiosity':p['curiosity'],
-                'mood':mood,'streak_days':p['streak'], 'activity':p['counts'],
+                'mood':mood,'last_active_at':p['last_active_at'],'streak_days':p['streak'], 'activity':p['counts'],
                 'today_xp':p['daily_xp'] if p['daily_date']==date else 0,
                 'daily_cap':MAX_DAILY_XP,'next_care':next_care,'badges':badges,
                 'memories':[dict(r) for r in memories],
