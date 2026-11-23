@@ -24,7 +24,6 @@ from datetime import datetime
 import h1lib as L
 
 HUNTS = os.path.join(L.HOME, "hunts")
-H1_USER = "dread_fox"
 DEFAULT_RPS, MAX_RPS = 2.0, 5.0
 MAX_PROBE_HOSTS, MAX_SCAN_URLS = 150, 60
 PROGRAM_BUDGET_S = 45 * 60
@@ -64,7 +63,8 @@ def analyze_policy(policy):
             rps = min(rps, v) if v < DEFAULT_RPS else rps
             notes.append(f"policy rate: {n}/{unit}")
     rps = max(0.2, min(rps, MAX_RPS))
-    hdr = L.policy_header(pol)
+    H1_USER = L.h1_user()
+    hdr = L.policy_header(pol, H1_USER)
     if hdr:
         val = re.sub(r"[<\[{(]\s*[^>\]})]*?(user|handle|name|h1)[^>\]})]*[>\]})]", H1_USER, hdr[1], flags=re.I)
         val = re.sub(r"\b(?:YOUR_?)?(?:H1_?)?USERNAME\b", H1_USER, val, flags=re.I).strip().strip("`'\"")

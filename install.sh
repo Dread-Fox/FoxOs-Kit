@@ -56,7 +56,7 @@ sudo ln -sf "$HOME/toolkit/refresh.py" /usr/local/bin/toolkit
 C="$HOME/.config/hackerone/creds"
 if [ ! -s "$C" ]; then
   mkdir -p "$(dirname "$C")"
-  read -rp "HackerOne API username [dread_fox] (blank = skip for now): " U; U="${U:-}"
+  read -rp "Your HackerOne API username (blank = skip for now): " U; U="${U:-}"
   if [ -n "$U" ]; then
     read -rsp "HackerOne API token (hidden): " T; echo
     umask 077; printf 'H1_USER=%s\nH1_TOKEN=%s\n' "$U" "$T" > "$C"; chmod 600 "$C"

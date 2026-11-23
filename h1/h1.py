@@ -219,7 +219,7 @@ def cmd_report(a):
             handle=a.target, title=title, asset=asset, scope_id=scope["id"] if scope else "",
             weakness=a.weakness or "", severity=a.severity, created=L.now(),
             host=re.sub(r"^\*\.|^https?://", "", asset).split("/")[0],
-            header_line=f"{hdr[0]}: {hdr[1]}" if hdr else "X-Bug-Bounty: HackerOne-dread_fox",
+            header_line=f"{hdr[0]}: {hdr[1]}" if hdr else f"X-Bug-Bounty: HackerOne-{L.h1_user()}",
             header_note=(f"Program requires header {hdr[0]}: {hdr[1]}" if hdr else
                          "No research header found in policy — check it manually")))
         print(path)

@@ -42,6 +42,17 @@ def _creds():
         raise H1Error(f"missing creds in {CREDS} (need H1_USER / H1_TOKEN): {e}")
 
 
+def h1_user():
+    """This machine's HackerOne username (from the creds file), used to tag research traffic."""
+    user = os.environ.get("H1_USER", "").strip()
+    if user:
+        return user
+    try:
+        return _creds()[0]
+    except H1Error:
+        raise H1Error(f"no HackerOne username: set H1_USER in {CREDS} before running recon/hunt")
+
+
 class Client:
     def __init__(self, delay=0.12):
         user, tok = _creds()
@@ -503,10 +514,11 @@ HDR_RE = re.compile(r"(" + HDR_NAME + r")\s*:\s*`*\s*((?:\[[^\]\n]*\]|<[^>\n]*>|
 PLACEHOLDER = re.compile(r"\[[^\]]*\]|<[^>]*>|\{[^}]*\}|\b(?:YOUR[-_ ]?)?(?:H1[-_ ]?|HACKERONE[-_ ]?)?(?:USERNAME|HANDLE)\b", re.I)
 
 
-def policy_header(policy, user="dread_fox"):
+def policy_header(policy, user=None):
     """Find the program's required research header and fill in our username.
 
     Prefers a 'format' occurrence (one with a placeholder) over an 'example' one; returns (name, value) or None."""
+    user = user or h1_user()
     hits = [(m.group(1), m.group(2).replace("\\", "").strip(" .:")) for m in HDR_RE.finditer(policy or "")]
     if not hits:
         return None
