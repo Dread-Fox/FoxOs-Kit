@@ -9,7 +9,7 @@
 <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
 <div id="toast" role="status" hidden></div>
 <section id="login-screen" class="login-screen">
- <div class="login-card"><div class="eyebrow">FOXWORX / WORKBENCH V3.8.1</div><h1>Your Kali workspace.<br>One secure browser.</h1>
+ <div class="login-card"><div class="eyebrow">FOXWORX / WORKBENCH V3.8.2</div><h1>Your Kali workspace.<br>One secure browser.</h1>
  <p class="muted">Terminal, tools, evidence and an approval-driven AI copilot—on your own node.</p>
  <div id="login-loading" class="notice">Checking your session…</div>
  <form id="login-form" hidden><label for="login-user">Operator name</label><input id="login-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32" placeholder="Leave empty to use the setup token">
@@ -20,7 +20,7 @@
  <p id="login-error" class="error" role="alert"></p><p class="hint">Only use this node for testing you are explicitly authorized to perform.</p></div>
 </section>
 <div id="workbench" hidden>
- <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">F<span>W</span></span><div><strong>FOXWORX</strong><small>KALI WORKBENCH <span class="version">V3.8.1</span></small></div></div>
+ <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">F<span>W</span></span><div><strong>FOXWORX</strong><small>KALI WORKBENCH <span class="version">V3.8.2</span></small></div></div>
  <div class="node-indicator"><span class="dot"></span><span id="node-name">Node</span><span class="badge" id="auth-badge">Signed in</span></div>
  <button id="pet-header-button" class="pet-companion" title="Visit your DreadFox companion" aria-label="Open DreadFox sanctuary" hidden><span class="pet-mini-fox" aria-hidden="true">🦊</span><span class="pet-mini-copy"><strong id="pet-header-name">DreadFox</strong><small id="pet-header-state">Fox Kit · Lv 1</small></span><span class="pet-mini-star" aria-hidden="true">✦</span></button>
  <div class="header-actions"><button id="toggle-tools" class="mobile-only">Tools</button><button id="theme-toggle" title="Switch light/dark theme" aria-label="Switch light or dark theme">◐</button><button id="help-button">Guide</button><button id="logout-button" hidden>Sign out</button></div></header>
@@ -263,7 +263,7 @@
    </section>
    <form id="chat-form" class="chat-composer"><label for="chat-input" class="sr-only">Message to AI copilot</label><textarea id="chat-input" rows="3" placeholder="Describe your objective or ask about a tool…" maxlength="12000"></textarea><div class="composer-footer"><span class="hint">Ctrl+Enter to send</span><button id="send-chat" type="submit" class="primary">Send</button></div><p class="hint privacy-copy">Sending shares your message, engagement scope/notes, matching local tool metadata and same-model chat history with the selected provider. Changing provider does not automatically forward previous chats. No terminal stream is shared automatically.</p></form>
   </aside>
- </div><footer class="app-footer"><span>FOXWORX WORKBENCH v3.8.1</span><span id="operator-label"></span><span>Human-approved commands · bounded Rabbit Hole automation</span></footer>
+ </div><footer class="app-footer"><span>FOXWORX WORKBENCH v3.8.2</span><span id="operator-label"></span><span>Human-approved commands · bounded Rabbit Hole automation</span></footer>
 </div>
 <dialog id="ai-settings-dialog" aria-labelledby="ai-settings-title"><div class="dialog-heading"><div><span class="eyebrow">UNIVERSAL AI ENGINE</span><h2 id="ai-settings-title">Provider &amp; model</h2></div><button type="button" data-close="ai-settings-dialog" aria-label="Close model settings">×</button></div>
 <p class="hint">Choose your provider and model independently of Tutor, Copilot, or Rabbit Hole mode. Cloud requests leave this node; local endpoints must be approved in the Pi configuration. Not all models support tool calls.</p>

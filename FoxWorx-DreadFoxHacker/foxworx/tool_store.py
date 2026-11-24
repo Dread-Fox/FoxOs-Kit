@@ -144,12 +144,14 @@ def _arch() -> str:
 
 class ToolStore:
     def __init__(self, cfg, registry, index: ToolsetIndex | None = None, run: Callable[[list[str]], str] = run_text,
-                 on_installed: Callable[[str], None] | None = None, fetch: Callable[[str], bytes] | None = None):
+                 on_installed: Callable[[str], None] | None = None, fetch: Callable[[str], bytes] | None = None,
+                 resolve: Callable[[str], str] | None = None):
         self.cfg, self.registry = cfg, registry
         self.index = index if index is not None else getattr(registry, 'toolsets', None)
         self.run = run
         self.on_installed = on_installed
         self.fetch = fetch or self._fetch
+        self.resolve = resolve or self._resolve
         self.tasks: dict[str, dict] = {}
         self._lock = threading.Lock()
         self._desc_cache: dict[str, str] = {}
@@ -337,10 +339,30 @@ class ToolStore:
         with urllib.request.urlopen(req, timeout=120) as r:  # nosec B310 - fixed https GitHub URLs only
             return r.read(200 * 1024 * 1024)
 
+    @staticmethod
+    def _resolve(url: str) -> str:
+        """Final URL after redirects (github.com/<repo>/releases/latest -> .../releases/tag/vX)."""
+        if not url.startswith('https://github.com/projectdiscovery/'):
+            raise ValueError('Unexpected location')
+        req = urllib.request.Request(url, method='HEAD', headers={'User-Agent': 'foxworx-tool-store'})
+        with urllib.request.urlopen(req, timeout=60) as r:  # nosec B310 - fixed https GitHub URL
+            return r.geturl()
+
+    def _latest_version(self, repo: str) -> str:
+        # The releases/latest redirect isn't rate-limited like the GitHub API (60 calls/hour per IP); API is the fallback.
+        try:
+            final = self.resolve(f'https://github.com/projectdiscovery/{repo}/releases/latest')
+            m = re.search(r'/releases/tag/v?([^/?#]+)$', final)
+            if m:
+                return m.group(1)
+        except Exception:  # nosec B110 - fall back to the API below
+            pass
+        release = json.loads(self.fetch(f'https://api.github.com/repos/projectdiscovery/{repo}/releases/latest'))
+        return str(release['tag_name']).lstrip('v')
+
     def _install_pd(self, task: dict, entry: dict) -> None:
         repo = entry['spec']
-        release = json.loads(self.fetch(f'https://api.github.com/repos/projectdiscovery/{repo}/releases/latest'))
-        ver = str(release['tag_name']).lstrip('v')
+        ver = self._latest_version(repo)
         if not re.fullmatch(r'[0-9][0-9A-Za-z.+-]{0,40}', ver):
             raise ValueError('Unexpected release version')
         asset = f'{repo}_{ver}_linux_{_arch()}.zip'

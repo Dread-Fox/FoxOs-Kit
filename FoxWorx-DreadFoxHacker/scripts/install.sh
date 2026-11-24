@@ -68,13 +68,13 @@ fi
 .venv/bin/python -m foxworx.cli configure --upgrade --profile "$PROFILE"
 if [[ "$SYSTEMD" -eq 0 ]]; then
   [[ "$NO_START" -eq 1 ]] || bash "$ROOT/scripts/serve.sh" start
-  printf 'Installed v3.8.1 in %s (no systemd: bash scripts/serve.sh start|stop|status)\n' "$ROOT"
+  printf 'Installed v3.8.2 in %s (no systemd: bash scripts/serve.sh start|stop|status)\n' "$ROOT"
   exit 0
 fi
 mkdir -p "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/foxworx-workbench.service" <<EOF
 [Unit]
-Description=FOXWORX Kali Workbench v3.8.1 (authenticated local service)
+Description=FOXWORX Kali Workbench v3.8.2 (authenticated local service)
 After=network.target
 
 [Service]
@@ -114,7 +114,7 @@ PY
   systemctl --user is-active --quiet foxworx-workbench || { journalctl --user -u foxworx-workbench -n 40 --no-pager; exit 1; }
 fi
 echo
-printf 'Installed v3.8.1 in %s\n' "$ROOT"
+printf 'Installed v3.8.2 in %s\n' "$ROOT"
 echo 'Local browser:           http://127.0.0.1:8765  (sign-in required)'
 echo 'First sign-in:           the setup token printed above (fresh installs and security upgrades only)'
 echo 'Named operator accounts: bash scripts/operator.sh add <name>'

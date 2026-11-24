@@ -48,6 +48,9 @@ def store(cfg, tmp_path, monkeypatch):
     st = ToolStore(reg.cfg, reg, index=index, run=runner)
     # Hermetic: only the test's own folder holds pipx/go, never the machine's real ones.
     st._which = lambda name: shutil.which(name, path=str(tmp_path / 'bin')) or ''
+    def no_network(url):
+        raise OSError('tests never touch the network')
+    st.resolve = no_network  # exercise the API fallback with the fake fetch below
     return st
 
 
@@ -145,3 +148,9 @@ def test_store_api_and_agent_isolation(cfg, tmp_path):
         assert any(e['action'] == 'tool-store-install' for e in app.state.store.events('local-operator'))
     from foxworx.ai import TOOLS
     assert not any('store' in t['name'] or 'install' in t['name'] for t in TOOLS)  # the agent can't install tools
+
+
+def test_latest_version_prefers_redirect(store):
+    store.resolve = lambda url: 'https://github.com/projectdiscovery/dnsx/releases/tag/v1.9.9'
+    store.fetch = lambda url: (_ for _ in ()).throw(AssertionError('API must not be called'))
+    assert store._latest_version('dnsx') == '1.9.9'
