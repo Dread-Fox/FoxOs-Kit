@@ -69,11 +69,14 @@ def main(argv):
         s = session()
         ai = call("GET", "/api/ai/settings")
         pet = call("GET", "/api/pet")
+        dens = call("GET", "/api/dens")
         sel = ai.get("selected") or {}
         print(json.dumps({"mode": mode.get("mode"), "version": mode.get("version"),
                           "ai": {k: sel.get(k) for k in ("provider", "model", "endpoint_id")}, "ai_ready": bool(ai.get("ready")),
                           "pet_hatched": bool(pet.get("hatched")), "pet_name": pet.get("name"),
-                          "actor": s.get("actor")}))
+                          "actor": s.get("actor"),
+                          "dens": {"enabled": dens.get("enabled"), "count": len(dens.get("dens") or []),
+                                   "tor": (dens.get("node") or {}).get("tor"), "label": (dens.get("node") or {}).get("label")}}))
         return 0
     if cmd == "select" and len(argv) == 4:
         s = session()

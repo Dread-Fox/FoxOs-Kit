@@ -26,7 +26,7 @@ say "installing packages (apt)…"
 sudo apt-get update -qq
 PKGS="python3 python3-tk python3-yaml python3-pil git curl jq whois dnsutils libnotify-bin xdotool xdg-utils
       subfinder dnsx httpx-toolkit nuclei katana amass theharvester figlet imagemagick fonts-dejavu fonts-firacode
-      python3-venv ca-certificates aria2 zenity libfuse2t64 libfuse2"
+      python3-venv ca-certificates aria2 zenity libfuse2t64 libfuse2 tor"
 [ $RICE = 1 ] && PKGS="$PKGS plymouth plymouth-themes"
 avail=""; for p in $PKGS; do apt-cache show "$p" >/dev/null 2>&1 && avail="$avail $p" || say "  (not in apt: $p — skipped)"; done
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $avail

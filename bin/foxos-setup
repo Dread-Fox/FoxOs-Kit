@@ -43,6 +43,12 @@ checklist() {
                                          || warn "FoxWorx running but asks for a login"
     [ "$(fw_field "d['ai']['model']")" = zenko-main ] && ok "FoxWorx AI → LM Studio / zenko-main" || warn "FoxWorx AI model not set to zenko-main"
     [ "$(fw_field "d['pet_hatched']")" = True ] && ok "DreadFox hatched ($(fw_field "d['pet_name']"))" || warn "DreadFox not hatched yet"
+    case "$(fw_field "d['dens']['tor']")" in
+      online)   ok "Dens ready over Tor as '$(fw_field "d['dens']['label']")' ($(fw_field "d['dens']['count']") den(s)) — FoxWorx → Dens tab" ;;
+      starting) warn "Dens: Tor is still connecting" ;;
+      missing)  warn "Dens: install tor (sudo apt install tor) to connect with friends" ;;
+      *)        warn "Dens: $(fw_field "d['dens']['tor']")" ;;
+    esac
   else warn "FoxWorx not running — start it from the FoxWorx desktop icon"; fi
   [ -n "$(lms_bin)" ] && ok "LM Studio installed" || warn "LM Studio not installed"
   main_model && ok "Zenko main model downloaded" || warn "Zenko main model not downloaded"
@@ -146,6 +152,7 @@ if fw_status >/dev/null; then
     name=""; [ -t 0 ] && read -rp "  Name it (Enter = DreadFox): " name
     "$API" hatch "${name:-DreadFox}" | sed 's/^/  /'
     say "It grows as you work in FoxWorx. Open it from the 'DreadFox Companion' desktop icon."
+    say "Tip: connect with friends' DreadFoxes in FoxWorx → Dens (encrypted, peer-to-peer over Tor)."
   fi
 else warn "FoxWorx isn't reachable — hatch it later in the FoxWorx web page (DreadFox tab)"; fi
 

@@ -21,6 +21,10 @@ It installs everything, then offers the **guided setup** (`foxos-setup`), which 
 Skip anything and come back later with `foxos-setup`; `foxos-setup --check` shows what's done.
 Then try: `h1 top · h1 recon --plan · h1 widget`, and the FoxWorx / DreadFox Companion / Bounty Radar desktop icons.
 
+**Dens:** in FoxWorx's **Dens** tab, connect your DreadFox with friends' installs: encrypted group chat, shared notes and
+findings, file sharing and light agent-to-agent help, peer-to-peer over Tor with no server. See
+`FoxWorx-DreadFoxHacker/docs/DENS.md`.
+
 ## What's inside
 | path | installs to | what |
 |---|---|---|
