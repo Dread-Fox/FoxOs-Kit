@@ -66,7 +66,7 @@ fi
 mkdir -p "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/foxworx-workbench.service" <<EOF
 [Unit]
-Description=FOXWORX Kali Workbench v3.5.0 (authenticated local service)
+Description=FOXWORX Kali Workbench v3.6.0 (authenticated local service)
 After=network.target
 
 [Service]
@@ -106,7 +106,7 @@ PY
   systemctl --user is-active --quiet foxworx-workbench || { journalctl --user -u foxworx-workbench -n 40 --no-pager; exit 1; }
 fi
 echo
-printf 'Installed v3.5.0 in %s\n' "$ROOT"
+printf 'Installed v3.6.0 in %s\n' "$ROOT"
 echo 'Local browser:           http://127.0.0.1:8765  (sign-in required)'
 echo 'First sign-in:           the setup token printed above (fresh installs and security upgrades only)'
 echo 'Named operator accounts: bash scripts/operator.sh add <name>'

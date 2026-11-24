@@ -76,6 +76,13 @@ class Settings:
     # Desktop DreadFox widget state file (aggregates only); empty disables the export.
     companion_file: str = ''
     companion_owner: str = ''
+    # Dens: encrypted peer-to-peer workspaces over a private Tor onion service (see docs/DENS.md).
+    den_enabled: bool = True
+    den_tor: bool = True
+    den_listen_port: int = 8766
+    den_socks_port: int = 19050
+    den_label: str = ''
+    den_address: str = ''  # testing/LAN only: 'direct:host:port' instead of Tor
 
     def validate(self) -> None:
         if bool(self.discord_bot_token) != bool(self.discord_channel_id):
@@ -208,6 +215,12 @@ class Settings:
             discord_node_label=val('FOXWORX_DISCORD_NODE_LABEL','FOXWORX'),
             companion_file=val('FOXWORX_COMPANION_FILE'),
             companion_owner=val('FOXWORX_COMPANION_OWNER'),
+            den_enabled=val('FOXWORX_DEN_ENABLED','1').lower() not in ('0','false','no','off'),
+            den_tor=val('FOXWORX_DEN_TOR','1').lower() not in ('0','false','no','off'),
+            den_listen_port=int(val('FOXWORX_DEN_LISTEN_PORT','8766')),
+            den_socks_port=int(val('FOXWORX_DEN_SOCKS_PORT','19050')),
+            den_label=val('FOXWORX_DEN_LABEL'),
+            den_address=val('FOXWORX_DEN_ADDRESS'),
         )
         cfg.validate()
         return cfg

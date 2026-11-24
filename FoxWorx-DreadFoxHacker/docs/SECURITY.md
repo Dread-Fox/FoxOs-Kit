@@ -133,3 +133,14 @@ Discord is an external untrusted channel. A node administrator configures a sing
 ## v3.4.0 authentication model
 
 v3.3.3 shipped an unauthenticated default (`open` mode) that accepted any tunnel hostname and let every visitor share one identity. v3.4.0 reverses that: `local` mode with sign-in is the default, upgrades preserve authenticated settings and move the old unacknowledged open default to `local`, and open mode is a loopback-only opt-in that refuses tunnels. Named operator accounts give each person their own record namespace, sessions and audit attribution. **They are not OS isolation**: all terminals run as the same Linux account, which can read the state database and configuration. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md).
+
+## v3.6.0 dens (peer-to-peer workspaces)
+
+Dens add a network-facing component, so their boundaries are explicit (details in [DENS.md](DENS.md)):
+
+- The Tor onion service forwards only to the den listener on 127.0.0.1:8766, never to the workbench web UI or API. Open (no-login) mode therefore doesn't expose the workbench to den peers.
+- The den listener speaks only the den protocol: a signed mutual handshake (the dialed onion must match the peer's signed card), then membership-checked sync. It enforces frame size, connection count, handshake timeout and per-peer rate limits.
+- All den content is signed and end-to-end encrypted; peers relay entries they can't alter. Removal rotates the den key and rejects the removed member's later entries even if backdated.
+- Everything received from a den is untrusted data, rendered as text. Nothing from a den is executed. Command proposals only prefill your own Copilot box, where scope, guardrails and approval apply. Partner AI questions never get tools; cloud answers are off by default and token-capped when enabled.
+- The node identity key lives in `<state>/den/identity.json` (0600), the same trust level as the workbench database. Anyone who can read the state directory can impersonate the node in its dens.
+- Known limits: a malicious *member* can still read everything in dens they belong to and can post misleading content; verify members with safety words and remove anyone you don't trust. Tor protects connections, not your behaviour inside a den.

@@ -15,7 +15,7 @@ class ModelGateway:
         self.completion = completion
         self.codex = codex
 
-    async def complete(self, route: dict, messages: list[dict], tools: list[dict]) -> dict:
+    async def complete(self, route: dict, messages: list[dict], tools: list[dict], max_tokens: int = 2400) -> dict:
         if route.get('provider') == 'codex':
             if self.codex is None:
                 raise HTTPException(503,'Codex provider transport is unavailable.')
@@ -27,7 +27,7 @@ class ModelGateway:
                 handler = acompletion
             except ImportError as exc:
                 raise HTTPException(503,'Optional LiteLLM dependency missing. Install requirements-ai.txt to enable multi-provider AI.') from exc
-        args = {'model':route['model'],'messages':messages,'timeout':40,'num_retries':0,'max_tokens':2400}
+        args = {'model':route['model'],'messages':messages,'timeout':40,'num_retries':0,'max_tokens':max(1,min(int(max_tokens),8192))}
         if route.get('api_key'):
             args['api_key']=route['api_key']
         elif route.get('api_base') and route.get('provider') in ('lmstudio','vllm','custom'):

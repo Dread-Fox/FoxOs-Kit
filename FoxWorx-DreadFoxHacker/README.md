@@ -1,4 +1,4 @@
-# FOXWORX Kali Workbench · v3.5.0
+# FOXWORX Kali Workbench · v3.6.0
 
 [![CI](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
@@ -178,6 +178,7 @@ Use the dedicated setup guides:
 - [Rabbit Hole authorization and limits](docs/RABBIT-HOLE.md)
 - [Administrator tool policy](docs/ADAPTER-POLICY.md) and [CLI adapters](docs/CLI-ADAPTERS.md)
 - [Discord team setup and sharing](docs/DISCORD-TEAM.md)
+- [Dens: encrypted peer-to-peer workspaces over Tor](docs/DENS.md)
 - [DreadFox companion and privacy controls](docs/DREADFOX.md) — includes the v3.5.0 redesign and the FoxOS desktop widget
 - [LM Studio with local abliterated models](docs/AI-PROVIDERS.md#lm-studio-with-local-abliterated-models-zenko)
 
