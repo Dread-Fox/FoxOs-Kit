@@ -61,6 +61,8 @@ tools Kali adds show up automatically**, and FoxWorx's agent discovers them on i
 foxos-tools inventory                  # everything installed: toolsets + categories, tool commands, tool folders
                                        # outside the package manager, /opt and ~/tools projects, what FoxWorx sees
 foxos-tools expose                     # let FoxWorx's agent use tools in ~/go/bin, ~/.cargo/bin, /snap/bin, pdtm…
+foxos-tools repo list                  # trusted toolset repos: Kali (Debian/Ubuntu, pinned), BlackArch, Wazuh
+foxos-tools repo add blackarch         # add one; signing keys are fingerprint-pinned, strap.sh checksum-verified
 foxos-tools check                      # the DreadFox tools: present or missing
 foxos-tools toolkit                    # detect a toolset; install Kali's headless set only if none
 foxos-tools toolkit --set default      # make sure a specific Kali set is present: headless, default, large, everything

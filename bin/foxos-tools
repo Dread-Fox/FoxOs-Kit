@@ -17,6 +17,9 @@
 #        of them FoxWorx's agent can see
 #   foxos-tools expose
 #        add those tool folders to FoxWorx's search path so its agent can use them
+#   foxos-tools repo list | add kali|blackarch|wazuh | remove NAME
+#        trusted toolset repositories with their official signing keys (fingerprint-pinned); Kali on
+#        Debian/Ubuntu is pinned so it never replaces system packages; BlackArch via verified strap.sh
 #   foxos-tools update [--auto]
 #        re-apply the toolkit to pull in tools Kali has added since, then expose new ones
 #   foxos-tools timer [--off]
@@ -524,6 +527,129 @@ cmd_expose() {
   say "(restart FoxWorx if it's running outside systemd; previous settings saved as ${SE##*/}.before-foxos-expose)"
 }
 
+# ------------------------------------------------------------------ trusted toolset repositories
+# Official signing keys, pinned by fingerprint (taken from the vendors' own keyring packages/keys).
+KALI_FPRS="827C8569F2518CC677FECA1AED65462EC8D5E4C5 44C6513A8E4FB3D30875F758ED444FF07D8D0BF6"
+WAZUH_FPR="0DCFCA5547B19D2A6099506096B3EE5F29111145"
+REPOS="kali blackarch wazuh"
+
+repo_info() {   # repo_info NAME -> "applies|configured|description"
+  case "$1" in
+    kali)
+      local app=no conf=no
+      [ "$FOXOS_PM" = apt ] && [ "$FOXOS_KALI" != 1 ] && app=yes
+      [ "$FOXOS_KALI" = 1 ] && conf=built-in
+      grep -rqsE 'kali\.(download|org)' /etc/apt/sources.list /etc/apt/sources.list.d/ && [ "$conf" = no ] && conf=yes
+      echo "$app|$conf|Kali tool repository for Debian/Ubuntu, pinned so it never replaces your system packages" ;;
+    blackarch)
+      local app=no conf=no
+      [ "$FOXOS_PM" = pacman ] && app=yes
+      grep -qs '^\[blackarch\]' /etc/pacman.conf && conf=yes
+      echo "$app|$conf|BlackArch repository for Arch (2,800+ tools; official strap.sh, checksum-verified)" ;;
+    wazuh)
+      local app=no conf=no
+      case "$FOXOS_PM" in apt|dnf|zypper) app=yes ;; esac
+      grep -rqs 'packages.wazuh.com' /etc/apt/sources.list /etc/apt/sources.list.d/ /etc/yum.repos.d/ /etc/zypp/repos.d/ && conf=yes
+      echo "$app|$conf|Wazuh security platform (XDR/SIEM agent and manager)" ;;
+  esac
+}
+
+cmd_repo() {
+  local action=${1:-list} name=${2:-} r info
+  for a in "$@"; do [ "$a" = --yes ] && YES=1; done
+  case "$action" in
+    list)
+      say "trusted toolset repositories for $FOXOS_NAME ($FOXOS_PM):"
+      for r in $REPOS; do
+        IFS='|' read -r app conf desc <<< "$(repo_info "$r")"
+        if [ "$conf" != no ]; then printf '  %s✓%s %-10s %s (%s)\n' "$G" "$N" "$r" "$desc" "$([ "$conf" = built-in ] && echo built in || echo configured)"
+        elif [ "$app" = yes ]; then printf '  %s+%s %-10s %s  → foxos-tools repo add %s\n' "$Y" "$N" "$r" "$desc" "$r"
+        else printf '  %s-%s %-10s %s (not for this distro)\n' "$D" "$N" "$r" "$desc"; fi
+      done ;;
+    add)
+      [ -n "$name" ] || { say "usage: foxos-tools repo add kali|blackarch|wazuh"; return 1; }
+      IFS='|' read -r app conf desc <<< "$(repo_info "$name")"
+      [ -n "$desc" ] || { say "unknown repository '$name' ($REPOS)"; return 1; }
+      [ "$conf" != no ] && { say "$name is already set up"; return 0; }
+      [ "$app" = yes ] || { say "$name isn't for $FOXOS_NAME"; return 1; }
+      "repo_add_$name" ;;
+    remove)
+      case "$name" in
+        kali) confirm "Remove the FoxOS Kali repository files?" || return 0
+              run sudo rm -f /etc/apt/sources.list.d/foxos-kali.sources /etc/apt/preferences.d/foxos-kali-pin /usr/share/keyrings/foxos-kali-archive-keyring.gpg
+              pm_update ;;
+        wazuh) confirm "Remove the FoxOS Wazuh repository files?" || return 0
+               run sudo rm -f /etc/apt/sources.list.d/foxos-wazuh.list /usr/share/keyrings/foxos-wazuh.gpg /etc/yum.repos.d/foxos-wazuh.repo /etc/zypp/repos.d/foxos-wazuh.repo
+               pm_update ;;
+        blackarch) say "BlackArch is removed by deleting its [blackarch] section from /etc/pacman.conf (strap.sh added it)" ;;
+        *) say "usage: foxos-tools repo remove kali|wazuh" ;;
+      esac ;;
+    *) say "usage: foxos-tools repo list | add NAME | remove NAME" ;;
+  esac
+}
+
+# Download a key and accept it only if every primary key in it is on the pinned list.
+fetch_verified_key() {   # fetch_verified_key URL OUTFILE "FPR1 FPR2..."
+  local url=$1 out=$2 allowed=$3 fprs f ok=1
+  have gpg || pkg_ensure gnupg
+  curl -fsSL --max-time 60 -o "$out" "$url" || { say "could not download $url"; return 1; }
+  fprs=$(gpg --batch --show-keys --with-colons "$out" 2>/dev/null | awk -F: '$1=="pub"{p=1;next} $1=="fpr"&&p{print $10;p=0}')
+  [ -n "$fprs" ] || { say "no usable key in $url"; return 1; }
+  for f in $fprs; do case " $allowed " in *" $f "*) ;; *) ok=0; say "unexpected key fingerprint $f — refusing";; esac; done
+  [ $ok = 1 ] && say "key verified: $(echo $fprs | tr '\n' ' ')"
+  [ $ok = 1 ]
+}
+
+repo_add_kali() {
+  say "Kali's repository on $FOXOS_NAME: Kali itself warns that mixing it into Debian/Ubuntu can break a system."
+  say "FoxOS pins it to priority 100, so it never upgrades or replaces your existing packages; only tools that"
+  say "your distro doesn't have come from Kali. The safer alternative is the Kali container: foxos-tools toolkit."
+  confirm "Add the pinned Kali repository?" || return 0
+  local tmp; tmp=$(mktemp -d)
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] verify https://archive.kali.org/archive-keyring.gpg against %s\n' "$KALI_FPRS"
+  else fetch_verified_key https://archive.kali.org/archive-keyring.gpg "$tmp/kali.gpg" "$KALI_FPRS" || { rm -rf "$tmp"; return 1; }; fi
+  run sudo install -m 0644 "$tmp/kali.gpg" /usr/share/keyrings/foxos-kali-archive-keyring.gpg
+  printf 'Types: deb\nURIs: http://http.kali.org/kali\nSuites: kali-rolling\nComponents: main contrib non-free non-free-firmware\nSigned-By: /usr/share/keyrings/foxos-kali-archive-keyring.gpg\n' > "$tmp/src"
+  printf 'Package: *\nPin: release o=Kali\nPin-Priority: 100\n' > "$tmp/pin"
+  run sudo install -m 0644 "$tmp/src" /etc/apt/sources.list.d/foxos-kali.sources
+  run sudo install -m 0644 "$tmp/pin" /etc/apt/preferences.d/foxos-kali-pin
+  rm -rf "$tmp"; pm_update
+  say "Kali repository added (pinned). Install a Kali-only tool normally, e.g.: sudo apt install <tool>"
+}
+
+repo_add_wazuh() {
+  confirm "Add the Wazuh repository (key fingerprint ${WAZUH_FPR})?" || return 0
+  local tmp; tmp=$(mktemp -d)
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] verify https://packages.wazuh.com/key/GPG-KEY-WAZUH against %s\n' "$WAZUH_FPR"
+  else fetch_verified_key https://packages.wazuh.com/key/GPG-KEY-WAZUH "$tmp/wazuh.asc" "$WAZUH_FPR" || { rm -rf "$tmp"; return 1; }; fi
+  case "$FOXOS_PM" in
+    apt) [ "${FOXOS_DRYRUN:-0}" = 1 ] || gpg --batch --dearmor -o "$tmp/wazuh.gpg" "$tmp/wazuh.asc"
+         run sudo install -m 0644 "$tmp/wazuh.gpg" /usr/share/keyrings/foxos-wazuh.gpg
+         echo 'deb [signed-by=/usr/share/keyrings/foxos-wazuh.gpg] https://packages.wazuh.com/4.x/apt/ stable main' > "$tmp/list"
+         run sudo install -m 0644 "$tmp/list" /etc/apt/sources.list.d/foxos-wazuh.list ;;
+    dnf|zypper)
+         printf '[wazuh]\nname=Wazuh repository\nbaseurl=https://packages.wazuh.com/4.x/yum/\ngpgcheck=1\ngpgkey=https://packages.wazuh.com/key/GPG-KEY-WAZUH\nenabled=1\n' > "$tmp/repo"
+         [ "$FOXOS_PM" = dnf ] && run sudo install -m 0644 "$tmp/repo" /etc/yum.repos.d/foxos-wazuh.repo
+         [ "$FOXOS_PM" = zypper ] && run sudo install -m 0644 "$tmp/repo" /etc/zypp/repos.d/foxos-wazuh.repo ;;
+  esac
+  rm -rf "$tmp"; pm_update
+  say "Wazuh repository added. Install e.g.: the wazuh-agent package"
+}
+
+repo_add_blackarch() {
+  say "BlackArch's official setup (strap.sh) adds its repository and keyring to pacman."
+  confirm "Download strap.sh, verify it against blackarch.org's published checksum and run it?" || return 0
+  local tmp want got; tmp=$(mktemp -d)
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] verify strap.sh sha1 from blackarch.org/downloads.html, then: sudo bash strap.sh\n'; rm -rf "$tmp"; return 0; fi
+  curl -fsSL --max-time 60 -o "$tmp/strap.sh" https://blackarch.org/strap.sh || { say "download failed"; rm -rf "$tmp"; return 1; }
+  want=$(curl -fsSL --max-time 30 https://blackarch.org/downloads.html | sed 's/<[^>]*>//g' | grep -o -E '[0-9a-f]{40}  strap\.sh' | head -1 | cut -d' ' -f1)
+  got=$(sha1sum "$tmp/strap.sh" | cut -d' ' -f1)
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then say "strap.sh checksum mismatch (published ${want:-none}, got $got) — not running it"; rm -rf "$tmp"; return 1; fi
+  say "strap.sh verified ($got)"
+  run sudo bash "$tmp/strap.sh"; rm -rf "$tmp"
+  say "BlackArch added. Its tools appear in FoxWorx's Tool store; install e.g.: sudo pacman -S blackarch-webapp"
+}
+
 confirm() { [ "$YES" = 1 ] && return 0; [ -t 0 ] || return 1; local a; read -rp "  $1 [y/N] " a; [[ "$a" =~ ^[Yy] ]]; }
 
 # Tests source this file with FOXOS_TOOLS_NO_MAIN=1 to call the functions directly.
@@ -534,9 +660,10 @@ case "${1:-check}" in
   install) shift; cmd_install "$@" ;;
   toolkit|kali) shift; cmd_toolkit "$@" ;;
   inventory) shift; cmd_inventory "$@" ;;
+  repo) shift; cmd_repo "$@" ;;
   expose) shift; cmd_expose "$@" ;;
   update) shift; cmd_update "$@" ;;
   timer) shift; cmd_timer "$@" ;;
-  -h|--help|help) sed -n 2,28p "$0" ;;
-  *) echo "usage: foxos-tools check | inventory | expose | install [--core|--all] | toolkit [--set …] | update | timer [--off]"; exit 1 ;;
+  -h|--help|help) sed -n 2,31p "$0" ;;
+  *) echo "usage: foxos-tools check | inventory | expose | repo … | install [--core|--all] | toolkit [--set …] | update | timer [--off]"; exit 1 ;;
 esac
