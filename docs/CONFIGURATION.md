@@ -32,6 +32,12 @@ Default file: `~/.config/foxworx-workbench/settings.env`. Use `bash scripts/conf
 | FOXWORX_SHELL | `/bin/bash`; an installed executable interactive shell. Its startup files may affect behavior. |
 | FOXWORX_COMPANION_FILE | Empty (off). Path of the desktop DreadFox widget state file, normally `~/h1/data/pet.json`. Only aggregate pet/memory values are written. |
 | FOXWORX_COMPANION_OWNER | Operator id whose pet is exported to the desktop widget (for example `local-operator`). |
+| FOXWORX_DEN_ENABLED | `1`. Dens (encrypted peer-to-peer workspaces over Tor); `0` turns them off. See DENS.md. |
+| FOXWORX_DEN_TOR | `1`. Run FOXWORX's own Tor onion service for dens. |
+| FOXWORX_DEN_LISTEN_PORT | `8766`. Den peer listener on 127.0.0.1; the onion service forwards only here. |
+| FOXWORX_DEN_SOCKS_PORT | `19050`. SOCKS port of FOXWORX's own Tor (separate from system Tor). |
+| FOXWORX_DEN_LABEL | `DreadFox`. Initial node name other den members see. |
+| FOXWORX_DEN_ADDRESS | Empty. Testing/LAN only: `direct:host:port` instead of Tor. |
 
 Session limits: server-side sessions of 8 hours (optional 7-day remembered device), revocable on sign-out, password change, operator removal and token rotation; at most 20 concurrent sessions per operator; sign-in throttled at 8 failures per client or name per 15 minutes; pending proposal 10 minutes; ticket 30 seconds/one use; socket reauthentication at most 15 minutes; detached terminal expiry 1 hour; PTY replay 256 KiB; up to 128 output messages per connected browser; paste/input at most 16 KiB per frame; upload 10 MiB; export 64 MiB uncompressed; 1,000 listed workspace files; 10,000 exported jobs; 200 recent jobs/proposals per view; 60 displayed chat messages; 12 prior messages used for AI history. AI context may include the explicitly opted-in last 12 KB of a selected job.
 

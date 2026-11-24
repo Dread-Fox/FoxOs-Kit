@@ -238,7 +238,7 @@ $('approval-form').onsubmit=async e=>{e.preventDefault();if(!$('approval-check')
   $('approval-dialog').close();switchTab('jobs');await refreshJobs();await selectJob(job.id);toast('Job accepted. Watch the recorded status and output; acceptance does not mean success.');
 }catch(err){$('approval-error').textContent=err.message;await refreshJobs();}finally{$('approve-run').disabled=!$('approval-check').checked;}};
 
-function switchTab(view){S.view=view;for(const name of ['terminal','intelligence','team','graph','jobs','evidence','hardware','node','pet']){$('view-'+name).hidden=name!==view;$('tab-'+name).setAttribute('aria-selected',String(name===view));}if(view==='terminal')requestAnimationFrame(()=>S.fit?.fit());if(view==='intelligence'&&!intelName)searchIntelligence().catch(e=>toast(e.message));if(view==='team')refreshTeam().catch(e=>toast(e.message));if(view==='evidence')refreshFiles().catch(e=>toast(e.message));if(view==='graph')S.graph?.refresh(S.eng);if(view==='hardware')refreshHardware().catch(e=>toast(e.message));if(view==='node')refreshNode().catch(e=>toast(e.message));if(view==='pet')petUI.refresh({quiet:true}).then(()=>petUI.refreshChat({quiet:true}));}
+function switchTab(view){S.view=view;for(const name of ['terminal','intelligence','dens','team','graph','jobs','evidence','hardware','node','pet']){$('view-'+name).hidden=name!==view;$('tab-'+name).setAttribute('aria-selected',String(name===view));}if(view==='terminal')requestAnimationFrame(()=>S.fit?.fit());if(view==='intelligence'&&!intelName)searchIntelligence().catch(e=>toast(e.message));if(view==='team')refreshTeam().catch(e=>toast(e.message));if(view==='dens')S.densUI?.refresh({force:true}).catch(e=>toast(e.message));if(view==='evidence')refreshFiles().catch(e=>toast(e.message));if(view==='graph')S.graph?.refresh(S.eng);if(view==='hardware')refreshHardware().catch(e=>toast(e.message));if(view==='node')refreshNode().catch(e=>toast(e.message));if(view==='pet')petUI.refresh({quiet:true}).then(()=>petUI.refreshChat({quiet:true}));}
 document.querySelectorAll('[data-tab]').forEach(b=>{b.onclick=()=>switchTab(b.dataset.tab);b.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const tabs=[...document.querySelectorAll('[data-tab]')];const next=tabs[(tabs.indexOf(b)+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.focus();next.click();}});});
 async function refreshJobs(){
   if(!S.eng)return;const eid=S.eng;const [jobs,proposals]=await Promise.all([api('/api/jobs?engagement_id='+eid),api('/api/proposals?engagement_id='+eid)]);if(eid!==S.eng)return;
@@ -623,6 +623,8 @@ window.addEventListener('online',()=>toast('Network restored. Reconnect a termin
 window.addEventListener('offline',()=>toast('Browser is offline. Node processes may still be running; input is not queued for replay.'));
 S.graph=createInvestigationGraph({api,onJob:async id=>{switchTab('jobs');await refreshJobs();await selectJob(id);},toast});
 const petUI=window.DreadFoxUI({api,$,text,toast,openPet:()=>switchTab('pet')});
+S.densUI=window.DreadFoxDens?window.DreadFoxDens({api,$,toast,useInCopilot:message=>{$('chat-input').value=message;$('chat-input').focus();toast('Placed in your Copilot box. Review it before sending; nothing runs without your approval.');}}):null;
+setInterval(()=>{if(S.session&&S.view==='dens'&&!document.hidden)S.densUI?.refresh().catch(()=>{});},3000);
 setInterval(()=>{if(S.session && !document.hidden)petUI.refresh({quiet:true});},60000);
 boot();
 

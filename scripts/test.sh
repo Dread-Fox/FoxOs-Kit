@@ -9,4 +9,4 @@ PYTHON="$(command -v -- "$PYTHON" || printf %s "$PYTHON")"
 "$PYTHON" -m pytest -q
 "$PYTHON" -m compileall -q foxworx
 for script in scripts/*.sh; do bash -n "$script"; done
-if command -v node >/dev/null; then for js in static/app.js static/pet.js static/fox-art.js; do node --check "$js"; done; fi
+if command -v node >/dev/null; then for js in static/app.js static/pet.js static/fox-art.js static/dens.js; do node --check "$js"; done; fi

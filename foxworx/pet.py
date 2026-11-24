@@ -40,6 +40,10 @@ OPS_CATEGORIES = {
     'zenko-memory-consolidated': 'learning_sessions',
     # No XP: admitted only so the companion can turn wary when an action is blocked.
     'rabbit-command-blocked': 'blocked_actions',
+    'den-created': 'workspace_planning',
+    'den-joined': 'workspace_planning',
+    'den-member-added': 'workspace_planning',
+    'den-shared': 'evidence_organization',
 }
 OPS_DAYS = 7
 OPS_MAX_COUNT = 20
@@ -65,6 +69,10 @@ ACTIVITIES = {
     'zenko-lesson-learned': ('wisdom', 8, 120, 'Turned experience into a lasting lesson.'),
     'zenko-engagement-completed': ('craft', 15, 300, 'Reflected on finished work and grew wiser.'),
     'zenko-memory-consolidated': ('stewardship', 4, 3600, 'Tidied its memories into clearer lessons.'),
+    'den-created': ('exploration', 6, 3600, 'Founded a den for a pack of foxes.'),
+    'den-joined': ('exploration', 6, 3600, 'Joined a den and met new foxes.'),
+    'den-member-added': ('stewardship', 3, 600, 'Welcomed a new fox into the den.'),
+    'den-shared': ('craft', 3, 600, 'Shared knowledge with the den.'),
 }
 STAGES = (
     ('Fox Kit', 1, 0, 0),

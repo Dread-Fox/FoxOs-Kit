@@ -1,3 +1,16 @@
+## v3.6.0 — Dens: encrypted peer-to-peer workspaces between DreadFox installs
+
+All v3.5.0 behaviour is unchanged; dens are additive and can be turned off (`FOXWORX_DEN_ENABLED=0`).
+
+- **Dens (new Dens tab):** two or more FOXWORX installs form an end-to-end encrypted shared workspace with no server. Each install runs its own Tor onion service (as the service user, separate from system Tor); members connect peer-to-peer over Tor. Group chat, shared notes and findings, command proposals for human review, and encrypted file sharing (10 MB, SHA-256 verified).
+- **Verification without a central authority:** Ed25519 node identities, self-signed cards, invite-based signed membership chain (any member or admins only), one-time expiring invite codes, and six safety words per pair for out-of-band checks.
+- **Mesh sync:** per-member signed, hash-chained logs; new entries are forwarded to other connected members, so offline members catch up from anyone. Causal membership replay tolerates clock skew; removal rotates the den key and rejects the removed member's later (even backdated) entries.
+- **Light agent collaboration:** partner requests are Recall (answered from shared notes, zero tokens) or one short question. Requests wait in an inbox unless auto-answers are enabled per den; questions use the local model by default; cloud answers are opt-in and capped (≤ 600 tokens); daily per-partner limits. Nothing from a den is ever executed: proposals go to your own Copilot for review.
+- New modules `den_crypto.py`, `den_store.py`, `den_net.py`, `den.py`; API under `/api/dens`; `static/dens.js`. `ModelGateway.complete` accepts an optional `max_tokens`.
+- DreadFox earns a little XP for founding/joining dens, welcoming members and sharing knowledge.
+- Fixed: the header and sign-in page still showed v3.4.0.
+- Tests: `tests/test_dens.py` (verification, mesh relay, files, agent limits, removal/rotation, tampering, clock skew, handshake) and `tests/test_dens_api.py` (two full workbenches over the HTTP API). Also verified manually over the real Tor network.
+
 ## v3.5.0 — DreadFox redesign, desktop companion, Zenko memory and local LM Studio models
 
 All v3.4.0 behaviour, security controls and APIs are unchanged; everything below is additive or opt-in.
