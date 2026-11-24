@@ -6,6 +6,8 @@
 #   ./install.sh --no-rice       skip the FoxOS cosmetics
 #   ./install.sh --rice          apply the FoxOS look even when this isn't Kali (rebrands boot/login/GRUB)
 #   ./install.sh --all-tools     also install the extra DreadFox tools individually (see: foxos-tools check)
+#   ./install.sh --container     run DreadFox inside an official Kali container (distrobox). Automatic on immutable
+#                                systems (Silverblue, Bazzite, MicroOS, SteamOS), NixOS and unsupported package managers.
 #   ./install.sh --toolkit SET   security toolset. auto (default): keep any recognised toolset (Kali, Parrot, BackBox,
 #                                BlackArch, Fedora Security Lab, Pentoo, REMnux, Exegol, or a big hand-built one) and
 #                                otherwise install Kali's headless set. headless|default|large|everything: make sure
@@ -18,11 +20,11 @@
 # Safe to re-run: existing creds, memory and backups are never overwritten.
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RICE=1 RICE_FORCED=0 TIMERS=1 RC=1 FOXWORX=1 ALL_TOOLS=0 TOOLKIT=auto
+RICE=1 RICE_FORCED=0 TIMERS=1 RC=1 FOXWORX=1 ALL_TOOLS=0 TOOLKIT=auto CONTAINER=0 INSIDE=0
 PREV=""
 for a in "$@"; do [ "$PREV" = --toolkit ] && { TOOLKIT=$a; PREV=""; continue; }; PREV=$a; case "$a" in
-  --no-rice) RICE=0 ;; --rice) RICE=1 RICE_FORCED=1 ;; --all-tools) ALL_TOOLS=1 ;; --toolkit) ;; --toolkit=*) TOOLKIT=${a#--toolkit=} ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
-  -h|--help) sed -n 2,18p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
+  --no-rice) RICE=0 ;; --rice) RICE=1 RICE_FORCED=1 ;; --all-tools) ALL_TOOLS=1 ;; --toolkit) ;; --toolkit=*) TOOLKIT=${a#--toolkit=} ;; --container) CONTAINER=1 ;; --inside-container) INSIDE=1 ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
+  -h|--help) sed -n 2,20p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
 case "$TOOLKIT" in auto|headless|default|large|everything|none) ;; *) echo "--toolkit must be auto, headless, default, large, everything or none"; exit 1 ;; esac
 [ "$(id -u)" -eq 0 ] && { echo "run as your normal user, not root"; exit 1; }
 say() { printf '\033[38;5;160m[foxos]\033[0m %s\n' "$*"; }
@@ -31,7 +33,45 @@ tmpl() { sed -e "s#@HOME@#$HOME#g" -e "s#@UID@#$(id -u)#g" "$1"; }
 . "$KIT/bin/foxos-pkg.sh"
 foxos_detect
 say "machine: $(uname -m) · $FOXOS_NAME · packages: $FOXOS_PM · user: $USER"
-[ "$FOXOS_PM" = unknown ] && { say "no supported package manager found (apt, dnf, pacman or zypper)"; exit 1; }
+
+# ------------------------------------------------------------------ container mode (immutable / unsupported hosts)
+IMMUTABLE=0
+{ [ -e /run/ostree-booted ] || [ "$FOXOS_ID" = nixos ] || [ "$FOXOS_ID" = steamos ] || command -v transactional-update >/dev/null; } && IMMUTABLE=1
+if [ $INSIDE = 0 ] && { [ $CONTAINER = 1 ] || [ $IMMUTABLE = 1 ] || [ "$FOXOS_PM" = unknown ]; }; then
+  BOXNAME=foxos
+  say "container mode: DreadFox will run inside an official Kali container ($BOXNAME) that shares your home folder."
+  [ $IMMUTABLE = 1 ] && say "  (this system is immutable/declarative, so the host's packages are left untouched)"
+  if ! command -v distrobox >/dev/null; then
+    say "distrobox is needed. Install it, then re-run ./install.sh:"
+    say "  Silverblue/Kinoite:  rpm-ostree install distrobox  (then reboot)   ·  Bazzite/SteamOS: already included"
+    say "  NixOS: add distrobox + podman to your configuration   ·  anywhere: see https://distrobox.it"
+    exit 1
+  fi
+  grep -qw "$BOXNAME" <<< "$(distrobox list 2>/dev/null)" || distrobox create --yes --name "$BOXNAME" --image docker.io/kalilinux/kali-rolling:latest
+  ARGS=(); for a in "$@"; do [ "$a" = --container ] || ARGS+=("$a"); done
+  distrobox enter "$BOXNAME" -- bash -lc "cd '$KIT' && ./install.sh --inside-container --no-rice --no-rc ${ARGS[*]}" || exit 1
+  # Host side: launchers, autostart and commands run inside the container.
+  for f in "$HOME"/.local/share/applications/{bounty-radar,dreadfox-companion,foxworx}.desktop "$HOME"/Desktop/{bounty-radar,dreadfox-companion,foxworx}.desktop "$HOME/.config/autostart/foxworx.desktop"; do
+    [ -f "$f" ] && ! grep -q '^Exec=distrobox enter' "$f" && sed -i "s#^Exec=#Exec=distrobox enter $BOXNAME -- #" "$f"
+  done
+  # ~/.local/bin is shared with the container, so each command checks where it runs: inside the container it
+  # runs the real tool, on the host it hops into the container first.
+  REAL="$HOME/.local/share/foxos/bin"; mkdir -p "$REAL" "$HOME/.local/bin"
+  for c in foxos-setup foxos-tools foxworx-api foxworx-launch h1; do
+    if [ -f "$HOME/.local/bin/$c" ] && ! grep -q 'foxos-container-wrapper' "$HOME/.local/bin/$c"; then mv -f "$HOME/.local/bin/$c" "$REAL/$c"; fi
+    target="$REAL/$c"; [ "$c" = h1 ] && target=/usr/local/bin/h1
+    cat > "$HOME/.local/bin/$c" <<WRAP
+#!/bin/sh
+# foxos-container-wrapper: runs $c inside the '$BOXNAME' container
+if [ -f /run/.containerenv ] || [ -f /.dockerenv ]; then exec $target "\$@"; fi
+exec distrobox enter $BOXNAME -- $target "\$@"
+WRAP
+    chmod +x "$HOME/.local/bin/$c"
+  done
+  say "done. Desktop icons start DreadFox inside the '$BOXNAME' container; 'distrobox enter $BOXNAME' opens a shell there."
+  exit 0
+fi
+[ "$FOXOS_PM" = unknown ] && { say "no supported package manager found (apt, dnf, pacman, zypper, apk or xbps)"; exit 1; }
 [ "$FOXOS_KALI" = 1 ] || say "not Kali: best-effort install. Kali's standard toolset will come from an official Kali container."
 if [ $RICE = 1 ] && [ "$FOXOS_KALI" != 1 ] && [ $RICE_FORCED = 0 ]; then
   RICE=0; say "skipping the FoxOS look on $FOXOS_NAME (it rebrands the system, login, boot splash and GRUB). Force it with --rice."
@@ -46,7 +86,28 @@ BASE="python3 python3-tk python3-yaml python3-pil python3-venv git curl jq whois
 # shellcheck disable=SC2086
 pkg_ensure $BASE
 [ -n "${FOXOS_SKIPPED:-}" ] && say "  not packaged by $FOXOS_NAME (skipped):${FOXOS_SKIPPED}"
-python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' || { say "Python 3.11 or newer is required (found $(python3 -V 2>&1))"; exit 1; }
+# FoxWorx needs Python 3.11+. Older distros (Ubuntu 22.04, Debian 11, RHEL 8/9) get a private Python 3.12
+# from uv (Astral's official tool) for FoxWorx only; the system Python is never touched.
+FW_PY=python3
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  say "system Python is $(python3 -V 2>&1 | cut -d' ' -f2); fetching a private Python 3.12 for FoxWorx (uv)…"
+  export PATH="$HOME/.local/bin:$PATH"
+  command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | env UV_NO_MODIFY_PATH=1 sh >/dev/null 2>&1
+  if command -v uv >/dev/null && uv python install 3.12 >/dev/null 2>&1; then
+    FW_PY=$(uv python find 3.12)
+    say "  using $FW_PY"
+  else
+    say "  could not get Python 3.12 automatically — FoxWorx will be skipped (install Python 3.11+ and re-run)"
+  fi
+fi
+# Start/restart FoxWorx with systemd when there's a user session, otherwise with its own serve.sh.
+fw_restart() {
+  if systemctl --user show-environment >/dev/null 2>&1 && systemctl --user cat foxworx-workbench.service >/dev/null 2>&1; then
+    systemctl --user restart foxworx-workbench.service
+  else
+    bash "$HOME/FoxWorx-DreadFoxHacker/scripts/serve.sh" restart >/dev/null
+  fi
+}
 
 # security tools DreadFox depends on (distro packages, verified release binaries, or pipx)
 mkdir -p "$HOME/.local/share/foxos" && cp "$KIT/bin/foxos-pkg.sh" "$HOME/.local/share/foxos/foxos-pkg.sh"
@@ -54,7 +115,7 @@ say "security tools…"
 bash "$KIT/bin/foxos-tools" install "$([ $ALL_TOOLS = 1 ] && echo --all || echo --core)" --yes || say "  some tools could not be installed — see: foxos-tools check"
 
 # ------------------------------------------------------------------ Claude Code
-if ! command -v claude >/dev/null && [ ! -x "$HOME/.local/bin/claude" ]; then
+if [ "${FOXOS_NO_CLAUDE:-0}" != 1 ] && ! command -v claude >/dev/null && [ ! -x "$HOME/.local/bin/claude" ]; then
   say "installing Claude Code (official installer)…"
   curl -fsSL https://claude.ai/install.sh | bash
 fi
@@ -119,12 +180,12 @@ description: "Which DreadFox this is — independent from the Raspberry Pi Dread
 metadata:
   type: project
 ---
-This box ($(hostname), $(uname -m)) is an INDEPENDENT DreadFox, set up from foxos-kit on $(date +%F).
+This box ($(uname -n), $(uname -m)) is an INDEPENDENT DreadFox, set up from foxos-kit on $(date +%F).
 It has its own HackerOne DB, timers, recon history and memory; the Raspberry Pi DreadFox is separate and
 keeps its own. Seeded notes describe the Pi's original setup — verify paths/state here before relying on them.
 Related: [[foxos-rice]], [[hackerone-api]].
 EOF
-  { echo "- [This machine](this-machine.md) — independent DreadFox on $(hostname), seeded $(date +%F)"
+  { echo "- [This machine](this-machine.md) — independent DreadFox on $(uname -n), seeded $(date +%F)"
     echo "- [FoxOS rice](foxos-rice.md) — crimson+steel FoxOS look; revert via ~/foxos/revert-foxos.sh"
     echo "- [websec framework](websec-framework.md) — headless authz testing toolkit at ~/websec"
     echo "- [Kali tool catalog](kali-tool-catalog.md) — rolling CLI tool catalog, run \`toolkit\` to refresh"
@@ -166,7 +227,7 @@ if [ $FOXWORX = 1 ]; then
   if [ ! -x "$FW/.venv/bin/python" ]; then
     LOGD="$HOME/.local/state/foxos"; mkdir -p "$LOGD"
     say "installing FoxWorx (Python packages; a few minutes — log: $LOGD/foxworx-install.log)…"
-    if (cd "$FW" && bash scripts/install.sh --no-start $([ "$FOXOS_PM" = apt ] || echo --skip-apt)) > "$LOGD/foxworx-install.log" 2>&1; then
+    if (cd "$FW" && FOXWORX_PYTHON="$FW_PY" bash scripts/install.sh --no-start $([ "$FOXOS_PM" = apt ] || echo --skip-apt)) > "$LOGD/foxworx-install.log" 2>&1; then
       # Local-only workbench: no login wall. Loopback listener only; tunnels/proxies stay refused.
       (cd "$FW" && bash scripts/configure.sh --insecure-open-mode) >> "$LOGD/foxworx-install.log" 2>&1 \
         && say "  FoxWorx set to no-login local mode (http://127.0.0.1:8765, this machine only)"
@@ -186,7 +247,6 @@ if [ $FOXWORX = 1 ]; then
   SE="$HOME/.config/foxworx-workbench/settings.env"
   if [ -f "$SE" ] && ! grep -q '^FOXWORX_COMPANION_FILE=' "$SE"; then
     printf 'FOXWORX_COMPANION_FILE=%s/h1/data/pet.json\nFOXWORX_COMPANION_OWNER=local-operator\n' "$HOME" >> "$SE"
-    systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true
     say "linked the DreadFox desktop companion to FoxWorx"
   fi
   # Tools exposed from the Kali toolkit container live in ~/.local/bin: let FoxWorx's agent find them.
@@ -199,9 +259,14 @@ if [ $FOXWORX = 1 ]; then
          else printf 'FOXWORX_EXTRA_TOOL_PATHS="%s"\n' "$new" >> "$SE"; fi ;;
     esac
   fi
-  if [ "${FW_NEW:-0}" = 1 ]; then
-    systemctl --user restart foxworx-workbench.service 2>/dev/null && say "FoxWorx is running: http://127.0.0.1:8765" \
-      || say "  FoxWorx didn't start yet — foxos-setup will retry"
+  if [ -x "$FW/.venv/bin/python" ]; then
+    if ! systemctl --user show-environment >/dev/null 2>&1; then
+      # No systemd user session (Alpine, Void, Devuan, Artix, containers): start FoxWorx at desktop login.
+      mkdir -p "$HOME/.config/autostart"
+      printf '[Desktop Entry]\nType=Application\nName=FoxWorx\nExec=bash %s/scripts/serve.sh start\nNoDisplay=true\nX-GNOME-Autostart-enabled=true\n' "$FW" \
+        > "$HOME/.config/autostart/foxworx.desktop"
+    fi
+    fw_restart >/dev/null 2>&1 && say "FoxWorx is running: http://127.0.0.1:8765" || say "  FoxWorx didn't start yet — foxos-setup will retry"
   fi
 fi
 

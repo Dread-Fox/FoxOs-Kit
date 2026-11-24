@@ -50,7 +50,7 @@ curl|core|pkg kali:curl|HTTP checks (FoxWorx workflows)
 dig|core|pkg kali:dnsutils|DNS lookups (FoxWorx, h1 recon)
 whois|core|pkg kali:whois|domain ownership (FoxWorx)
 openssl|core|pkg kali:openssl|TLS certificate checks (FoxWorx)
-whatweb|core|pkg kali:whatweb|web fingerprinting (FoxWorx)
+whatweb|extra|pkg kali:whatweb|web fingerprinting (FoxWorx web-fingerprint workflow)
 subfinder|core|pkg pd:subfinder kali:subfinder|passive subdomains (h1 recon/hunt)
 dnsx|core|pkg pd:dnsx kali:dnsx|DNS resolution at scale (h1 recon/hunt)
 httpx-toolkit|core|pkg pd:httpx kali:httpx-toolkit|HTTP probing (h1 recon/hunt)
@@ -121,7 +121,8 @@ pd_install() (   # pd_install REPO TARGET_NAME  (subshell: its temp dir is alway
   have unzip || pkg_ensure unzip
   tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
   api=$(curl -fsSL --max-time 30 "https://api.github.com/repos/projectdiscovery/$repo/releases/latest") || { echo "    GitHub API unreachable"; exit 1; }
-  ver=$(printf '%s' "$api" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))') || exit 1
+  ver=$(printf '%s' "$api" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"v\{0,1\}\([^"]*\)"$/\1/')  # no python needed
+  [ -n "$ver" ] || exit 1
   asset="${repo}_${ver}_linux_${FOXOS_ARCH}.zip"; sums="${repo}_${ver}_checksums.txt"
   if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] download %s (verify against %s) → %s/%s\n' "$asset" "$sums" "$BIN" "$target"; exit 0; fi
   curl -fsSL --max-time 300 -o "$tmp/$asset" "https://github.com/projectdiscovery/$repo/releases/download/v$ver/$asset" || exit 1
@@ -201,7 +202,7 @@ kali_meta_installed() {
       dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best=$m; r=$(rank "$m"); }
     done
   fi
-  if [ -z "$best" ] && have distrobox && distrobox list 2>/dev/null | grep -qw "$BOX"; then
+  if [ -z "$best" ] && have distrobox && grep -qw "$BOX" <<< "$(distrobox list 2>/dev/null)"; then
     for m in $META_RANK; do m=${m%%:*}
       distrobox enter "$BOX" -- dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best="container:$m"; r=$(rank "$m"); }
     done
@@ -276,7 +277,7 @@ toolset_scan() {
     n=$(pacman -Qg blackarch 2>/dev/null | wc -l)
     [ "$n" -ge 20 ] && echo "blackarch|BlackArch ($n tools installed)|pacman"
   fi
-  if command -v dnf >/dev/null && dnf -q group list --installed 2>/dev/null | grep -qi 'security lab'; then
+  if command -v dnf >/dev/null && grep -qi 'security lab' <<< "$(dnf -q group list --installed 2>/dev/null)"; then
     echo "fedora-security-lab|Fedora Security Lab|dnf-group:security-lab"
   fi
   [ -d /var/db/pkg/pentoo ] && echo "pentoo|Pentoo|remind:sudo emerge --sync && sudo emerge -uDN @world"
@@ -354,7 +355,7 @@ cmd_toolkit() {
     if [ "${FOXOS_DRYRUN:-0}" != 1 ] && ! { have podman && have distrobox; }; then
       say "podman/distrobox aren't in $FOXOS_NAME's repos — install them (https://distrobox.it), then: foxos-tools toolkit"; return 1
     fi
-    if [ "${FOXOS_DRYRUN:-0}" = 1 ] || ! distrobox list 2>/dev/null | grep -qw "$BOX"; then
+    if [ "${FOXOS_DRYRUN:-0}" = 1 ] || ! grep -qw "$BOX" <<< "$(distrobox list 2>/dev/null)"; then
       run distrobox create --yes --name "$BOX" --image docker.io/kalilinux/kali-rolling:latest || return 1
       # remember what the bare image ships, so only toolkit binaries get exposed
       if [ "${FOXOS_DRYRUN:-0}" != 1 ]; then
@@ -443,6 +444,12 @@ cmd_update() {
 # Weekly unattended update (container: fully automatic; Kali host: a reminder, since apt needs sudo).
 cmd_timer() {
   local u="$HOME/.config/systemd/user" self; self="$(readlink -f "$0")"
+  if ! systemctl --user show-environment >/dev/null 2>&1; then
+    command -v crontab >/dev/null || { say "no systemd user session and no cron: run 'foxos-tools update' yourself now and then"; return 0; }
+    if [ "${1:-}" = --off ]; then crontab -l 2>/dev/null | grep -v 'foxos-tools update' | crontab -; say "weekly tool updates off"; return; fi
+    ( crontab -l 2>/dev/null | grep -v 'foxos-tools update'; echo "17 4 * * 0 $self update --auto >/dev/null 2>&1" ) | crontab -
+    say "weekly tool updates on (cron, Sundays 04:17)"; return
+  fi
   [ "${1:-}" = --off ] && { run systemctl --user disable --now foxos-tools-update.timer; say "weekly tool updates off"; return; }
   mkdir -p "$u"
   printf '[Unit]\nDescription=FoxOS weekly security toolkit update\n\n[Service]\nType=oneshot\nEnvironment=PATH=%s/.local/bin:/usr/local/bin:/usr/bin:/bin\nEnvironment=DISPLAY=:0\nEnvironment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%s/bus\nExecStart=%s update --auto\n' \
@@ -523,8 +530,9 @@ cmd_expose() {
   if grep -q '^FOXWORX_EXTRA_TOOL_PATHS=' "$SE"; then sed -i "s#^FOXWORX_EXTRA_TOOL_PATHS=.*#FOXWORX_EXTRA_TOOL_PATHS=\"$new\"#" "$SE"
   else printf 'FOXWORX_EXTRA_TOOL_PATHS="%s"\n' "$new" >> "$SE"; fi
   say "FoxWorx can now use tools in:$added"
-  systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true
-  say "(restart FoxWorx if it's running outside systemd; previous settings saved as ${SE##*/}.before-foxos-expose)"
+  if systemctl --user show-environment >/dev/null 2>&1; then systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true
+  elif bash "$HOME/FoxWorx-DreadFoxHacker/scripts/serve.sh" status >/dev/null 2>&1; then bash "$HOME/FoxWorx-DreadFoxHacker/scripts/serve.sh" restart >/dev/null 2>&1 || true; fi
+  say "(previous settings saved as ${SE##*/}.before-foxos-expose)"
 }
 
 # ------------------------------------------------------------------ trusted toolset repositories

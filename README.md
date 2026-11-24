@@ -27,16 +27,26 @@ findings, file sharing and light agent-to-agent help, peer-to-peer over Tor with
 
 ## Supported systems
 
-| System | Status |
-|---|---|
-| **Kali** (x86-64, ARM64) | Tested. Everything, including the FoxOS look. |
-| **Debian, Ubuntu, Mint, Parrot, Pop!_OS** (apt) | Best-effort, untested. |
-| **Fedora, RHEL, Rocky, Alma** (dnf) | Best-effort, untested. |
-| **Arch, Manjaro, EndeavourOS** (pacman) | Best-effort, untested. |
-| **openSUSE** (zypper) | Best-effort, untested. |
+Every push runs the real installer in clean containers for each distro below (`.github/workflows/distro-matrix.yml`,
+`tests/distro/run.sh`): packages, security tools, FoxWorx install, FoxWorx running and cataloguing tools.
 
-Needs a 64-bit CPU, a desktop login with systemd and Python 3.11+. On anything that isn't Kali the FoxOS look
-(system branding, login screen, boot splash, GRUB) is skipped unless you pass `--rice`.
+| System | Package manager | Notes |
+|---|---|---|
+| **Kali** | apt | Primary platform, includes the FoxOS look. |
+| Debian 12, Ubuntu 22.04 / 24.04 (+ Mint, Pop!_OS, Parrot) | apt | Ubuntu 22.04 gets a private Python 3.12 for FoxWorx automatically. |
+| Fedora (+ RHEL, Rocky, Alma) | dnf | Older RHEL-family Python is handled the same way. |
+| Arch (+ Manjaro, EndeavourOS) | pacman | |
+| openSUSE Tumbleweed / Leap | zypper | |
+| Alpine | apk | Install `bash` first (`apk add bash`). |
+| Void | xbps | Void doesn't package nmap; it comes from the standard Kali toolset. |
+| **Immutable or declarative systems** (Fedora Silverblue/Kinoite/Bazzite, openSUSE MicroOS, SteamOS, NixOS) and anything else | — | **Container mode**: DreadFox runs inside an official Kali container via distrobox, sharing your home folder. Automatic on these systems, or force it with `./install.sh --container`. *Not yet covered by the automated tests.* |
+
+- **No systemd?** (Alpine, Void, Devuan, Artix…) FoxWorx runs without a service (`~/FoxWorx-DreadFoxHacker/scripts/serve.sh start|stop|status`)
+  and starts at desktop login; weekly tool updates use cron.
+- **No sudo?** `doas` is used automatically.
+- **Python older than 3.11?** FoxWorx gets its own Python 3.12 from [uv](https://docs.astral.sh/uv/); the system Python is untouched.
+- Needs a 64-bit CPU (x86-64 or ARM64). The FoxOS look (branding, login screen, boot splash, GRUB) is only applied on Kali
+  unless you pass `--rice`.
 
 ### Security tools on any distro: `foxos-tools`
 By default the installer makes sure a **security toolset** is present. It first looks for one it recognises and,
