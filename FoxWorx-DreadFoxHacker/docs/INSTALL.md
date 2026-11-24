@@ -1,6 +1,6 @@
 # Installation — local port 8765; no Cloudflare required
 
-**Current release: FoxWorx-DreadFoxHacker-v3.8.0.** The default installation requires sign-in, works locally without Cloudflare, and optionally accepts one configured public HTTPS hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for sign-in, operator accounts, upgrades and remote access.
+**Current release: FoxWorx-DreadFoxHacker-v3.8.1.** The default installation requires sign-in, works locally without Cloudflare, and optionally accepts one configured public HTTPS hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for sign-in, operator accounts, upgrades and remote access.
 
 
 ## 1. Choose the host account
@@ -13,10 +13,10 @@ Keep the host powered, cooled and backed by reliable storage. Job logs and artif
 
 ## 2. Extract and install
 
-Extract the release ZIP under your home directory. The top-level directory is `FoxWorx-DreadFoxHacker-v3.8.0`. Use a path without whitespace, quotes, percent signs or backslashes; the installer validates this to avoid systemd quoting problems. Do not move it after installation without rerunning the installer.
+Extract the release ZIP under your home directory. The top-level directory is `FoxWorx-DreadFoxHacker-v3.8.1`. Use a path without whitespace, quotes, percent signs or backslashes; the installer validates this to avoid systemd quoting problems. Do not move it after installation without rerunning the installer.
 
 ```bash
-cd ~/FoxWorx-DreadFoxHacker-v3.8.0
+cd ~/FoxWorx-DreadFoxHacker-v3.8.1
 bash scripts/install.sh --preflight # no modifications
 bash scripts/install.sh
 ```
@@ -208,3 +208,11 @@ Read [Hardware Intelligence](HARDWARE-INTELLIGENCE.md) for supported classes, ad
 ## v3.3 Discord team integration (optional)
 
 The Discord bridge is disabled until a bot token and channel ID are set on the host. See [Discord Team Intelligence](DISCORD-TEAM.md) for the least-privilege bot setup, Message Content requirements, team-key mapping, draft approvals, rate-limit handling, privacy and troubleshooting. **Never place the bot token in source control.** Existing v3.2 databases and configuration are preserved.
+
+## Without systemd, or with an older Python (v3.8.1)
+
+- **No systemd user session** (Alpine, Void, Devuan, Artix, containers): the installer still completes and starts FOXWORX
+  with `bash scripts/serve.sh start`. Use `serve.sh stop|status|restart` to manage it; add `serve.sh start` to your desktop
+  autostart (the FoxOS kit does this) to start it at login.
+- **Python older than 3.11:** install a newer Python next to the system one (for example `uv python install 3.12`) and run
+  `FOXWORX_PYTHON=$(uv python find 3.12) bash scripts/install.sh`. The FoxOS kit does this automatically.
