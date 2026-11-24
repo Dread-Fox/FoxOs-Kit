@@ -9,7 +9,7 @@
 <div id="announcer" class="sr-only" role="status" aria-live="polite"></div>
 <div id="toast" role="status" hidden></div>
 <section id="login-screen" class="login-screen">
- <div class="login-card"><div class="eyebrow">FOXWORX / WORKBENCH V3.7.0</div><h1>Your Kali workspace.<br>One secure browser.</h1>
+ <div class="login-card"><div class="eyebrow">FOXWORX / WORKBENCH V3.8.0</div><h1>Your Kali workspace.<br>One secure browser.</h1>
  <p class="muted">Terminal, tools, evidence and an approval-driven AI copilot—on your own node.</p>
  <div id="login-loading" class="notice">Checking your session…</div>
  <form id="login-form" hidden><label for="login-user">Operator name</label><input id="login-user" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32" placeholder="Leave empty to use the setup token">
@@ -20,7 +20,7 @@
  <p id="login-error" class="error" role="alert"></p><p class="hint">Only use this node for testing you are explicitly authorized to perform.</p></div>
 </section>
 <div id="workbench" hidden>
- <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">F<span>W</span></span><div><strong>FOXWORX</strong><small>KALI WORKBENCH <span class="version">V3.7.0</span></small></div></div>
+ <header class="app-header"><div class="brand"><span class="brand-icon" aria-hidden="true">F<span>W</span></span><div><strong>FOXWORX</strong><small>KALI WORKBENCH <span class="version">V3.8.0</span></small></div></div>
  <div class="node-indicator"><span class="dot"></span><span id="node-name">Node</span><span class="badge" id="auth-badge">Signed in</span></div>
  <button id="pet-header-button" class="pet-companion" title="Visit your DreadFox companion" aria-label="Open DreadFox sanctuary" hidden><span class="pet-mini-fox" aria-hidden="true">🦊</span><span class="pet-mini-copy"><strong id="pet-header-name">DreadFox</strong><small id="pet-header-state">Fox Kit · Lv 1</small></span><span class="pet-mini-star" aria-hidden="true">✦</span></button>
  <div class="header-actions"><button id="toggle-tools" class="mobile-only">Tools</button><button id="theme-toggle" title="Switch light/dark theme" aria-label="Switch light or dark theme">◐</button><button id="help-button">Guide</button><button id="logout-button" hidden>Sign out</button></div></header>
@@ -51,6 +51,13 @@
         <div><h4>Where tools come from</h4><div id="inv-origins"></div><h4>Searched folders</h4><div id="inv-dirs"></div></div></div>
       <h4>Categories <span class="hint">(click to list the tools)</span></h4><div id="inv-categories" class="inv-chips"></div>
       <div id="inv-projects-wrap" hidden><h4>Tool projects <span class="hint">(folders without a single command; run from the folder or link a launcher into ~/.local/bin)</span></h4><div id="inv-projects"></div></div>
+    </details>
+    <details id="store" class="inventory" open><summary><strong>Tool store</strong> <span class="hint">find and add security tools by keyword; new tools are recognised immediately</span></summary>
+      <form id="store-form" class="intel-search-line"><label class="sr-only" for="store-q">Keyword</label><input id="store-q" type="search" maxlength="80" placeholder="Try: subdomain, wifi, jwt, active directory, xss, firmware…" autocomplete="off"><button class="primary" type="submit">Find tools</button></form>
+      <p id="store-note" class="hint">Searches your distro's repositories (with security toolset categories) and a vetted set of ProjectDiscovery, pipx and Go tools. User-level tools install directly; system packages open the terminal with the exact sudo command for you to review.</p>
+      <div id="store-results" class="store-results"></div>
+      <div id="store-tasks"></div>
+      <h4>Trusted toolset repositories</h4><div id="store-repos"></div>
     </details>
     <div class="intel-search-line"><label class="sr-only" for="intel-search">Find installed command-line tools</label><input id="intel-search" type="search" placeholder="Find an installed tool or capability…" autocomplete="off"><button id="intel-find">Search host inventory</button></div>
     <p id="intel-result-count" class="hint">Search your node’s executable inventory, or open a tool from the toolbox.</p>
@@ -256,7 +263,7 @@
    </section>
    <form id="chat-form" class="chat-composer"><label for="chat-input" class="sr-only">Message to AI copilot</label><textarea id="chat-input" rows="3" placeholder="Describe your objective or ask about a tool…" maxlength="12000"></textarea><div class="composer-footer"><span class="hint">Ctrl+Enter to send</span><button id="send-chat" type="submit" class="primary">Send</button></div><p class="hint privacy-copy">Sending shares your message, engagement scope/notes, matching local tool metadata and same-model chat history with the selected provider. Changing provider does not automatically forward previous chats. No terminal stream is shared automatically.</p></form>
   </aside>
- </div><footer class="app-footer"><span>FOXWORX WORKBENCH v3.7.0</span><span id="operator-label"></span><span>Human-approved commands · bounded Rabbit Hole automation</span></footer>
+ </div><footer class="app-footer"><span>FOXWORX WORKBENCH v3.8.0</span><span id="operator-label"></span><span>Human-approved commands · bounded Rabbit Hole automation</span></footer>
 </div>
 <dialog id="ai-settings-dialog" aria-labelledby="ai-settings-title"><div class="dialog-heading"><div><span class="eyebrow">UNIVERSAL AI ENGINE</span><h2 id="ai-settings-title">Provider &amp; model</h2></div><button type="button" data-close="ai-settings-dialog" aria-label="Close model settings">×</button></div>
 <p class="hint">Choose your provider and model independently of Tutor, Copilot, or Rabbit Hole mode. Cloud requests leave this node; local endpoints must be approved in the Pi configuration. Not all models support tool calls.</p>

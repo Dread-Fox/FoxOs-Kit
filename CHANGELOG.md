@@ -1,3 +1,10 @@
+## v3.8.0 — Tool store: find and add security tools by keyword
+
+- **Tool store** (Tool Intelligence tab, `/api/store/*`): search by a cyber keyword ("subdomain", "wifi", "jwt", "active directory") across the distro's repositories (apt/pacman/dnf, with security toolset categories; library, debug and firmware packages filtered out) and a vetted catalog of ProjectDiscovery, pipx and Go tools. User-level tools install directly (ProjectDiscovery binaries SHA-256 checked against each release's checksums); system packages are typed into the terminal as the exact sudo command for the operator to review. Installed tools are recognised immediately (registry rescan), with the catalog's category and description.
+- **Trusted toolset repositories:** shows Kali (Debian/Ubuntu, pinned), BlackArch (Arch) and Wazuh status, and launches `foxos-tools repo add …` (FoxOS kit) in the terminal; keys are fingerprint-pinned there.
+- Operator-only: the agent has no access to the store. Installs are audited (`tool-store-install`).
+- Tests: `tests/test_tool_store.py`.
+
 ## v3.7.0 — Full tool catalog on any distro and any toolkit
 
 All v3.6.0 behaviour is unchanged; the catalog is richer and searches more places.

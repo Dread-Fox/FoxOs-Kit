@@ -169,6 +169,64 @@ async function refreshInventory(force=false){
   $('inv-projects-wrap').hidden=!inv.projects.length;
   $('inv-projects').replaceChildren(...inv.projects.map(p=>{const r=el('div','inv-cat');r.append(el('code',null,p.path),el('span','hint',p.launchers.join(', ')||'no launcher found'));return r;}));
 }
+// ---- tool store: operator-only installs; system commands are typed into the terminal for review, never run
+async function typeInTerminal(command){
+  switchTab('terminal');
+  if(!S.terminalId){await newTerminal();await new Promise(r=>setTimeout(r,900));}  // let a new shell print its prompt
+  else if(!S.ws||S.ws.readyState!==WebSocket.OPEN)await connectTerminal(S.terminalId);
+  if(!S.ws||S.ws.readyState!==WebSocket.OPEN){toast('Connect the terminal, then try again.');return;}
+  sendInput(command);S.term.focus();
+  toast('Command typed into the terminal. Review it, then press Enter (it will ask for your password).');
+}
+const storeEl=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!=null)n.textContent=txt;return n;};
+const STORE_SOURCES={pd:'ProjectDiscovery',pipx:'pipx',go:'Go',dpkg:'apt',pacman:'pacman',rpm:'dnf',system:'system'};
+let storeTimer=null;
+async function storeSearch(){
+  const q=$('store-q').value.trim();if(!q)return;
+  const box=$('store-results');box.replaceChildren(storeEl('p','hint','Searching…'));
+  let out;try{out=await api('/api/store/search?q='+encodeURIComponent(q));}catch(e){box.replaceChildren(storeEl('p','error',e.message));return;}
+  box.replaceChildren();
+  if(!out.results.length)box.append(storeEl('p','hint','No tools found for that keyword. Try a broader word, or add a toolset repository below.'));
+  for(const r of out.results){
+    const row=storeEl('div','store-row');
+    const info=storeEl('div');
+    const head=storeEl('div','store-head');head.append(storeEl('strong',null,r.name),storeEl('span','den-pill',STORE_SOURCES[r.source]||r.source));
+    if(r.category)head.append(storeEl('span','hint',r.category));
+    info.append(head,storeEl('div','hint',r.description||''));
+    const btn=storeEl('button',r.installed?'tiny':'tiny primary',r.installed?'Installed':(r.install==='terminal'?'Install (sudo)':'Install'));
+    btn.disabled=!!r.installed;
+    btn.onclick=handle(async()=>{
+      const res=await api('/api/store/install','POST',{id:r.id});
+      if(res.mode==='terminal'){toast(res.message);await typeInTerminal(res.command);}
+      else{toast(`Installing ${r.name}…`);btn.disabled=true;btn.textContent='Installing…';pollStoreTasks();}
+    });
+    row.append(info,btn);box.append(row);
+  }
+}
+async function pollStoreTasks(){
+  clearTimeout(storeTimer);
+  const {tasks}=await api('/api/store/tasks');const box=$('store-tasks');box.replaceChildren();
+  for(const t of tasks.slice(0,5)){
+    const d=storeEl('details','store-task');const sum=storeEl('summary',null,`${t.name} · ${t.status}`);d.append(sum,storeEl('pre','den-cmd',t.log||''));
+    if(t.status==='running')d.open=true;box.append(d);
+  }
+  if(tasks.some(t=>t.status==='running'))storeTimer=setTimeout(()=>pollStoreTasks().catch(()=>{}),2000);
+  else if(tasks.length){inventoryLoaded=false;refreshInventory(true).catch(()=>{});api('/api/tools').then(setInventory).catch(()=>{});}
+}
+async function storeRepos(){
+  const {repos}=await api('/api/store/repos');const box=$('store-repos');box.replaceChildren();
+  for(const r of repos){
+    const row=storeEl('div','store-row');const info=storeEl('div');
+    info.append(storeEl('strong',null,r.name),storeEl('div','hint',r.description));
+    let btn;
+    if(r.configured)btn=storeEl('span','den-pill','✓ set up');
+    else if(!r.applies)btn=storeEl('span','hint','not for this distro');
+    else if(r.command){btn=storeEl('button','tiny','Add…');btn.onclick=handle(()=>typeInTerminal(r.command));}
+    else btn=storeEl('span','hint','needs foxos-tools (FoxOS kit)');
+    row.append(info,btn);box.append(row);
+  }
+}
+$('store-form').onsubmit=ev=>{ev.preventDefault();storeSearch().catch(e=>toast(e.message));};
 async function searchIntelligence(){
   const term=$('intel-search').value.trim();
   const result=await api('/api/tool-intelligence?query='+encodeURIComponent(term));
@@ -261,7 +319,7 @@ $('approval-form').onsubmit=async e=>{e.preventDefault();if(!$('approval-check')
   $('approval-dialog').close();switchTab('jobs');await refreshJobs();await selectJob(job.id);toast('Job accepted. Watch the recorded status and output; acceptance does not mean success.');
 }catch(err){$('approval-error').textContent=err.message;await refreshJobs();}finally{$('approve-run').disabled=!$('approval-check').checked;}};
 
-function switchTab(view){S.view=view;for(const name of ['terminal','intelligence','dens','team','graph','jobs','evidence','hardware','node','pet']){$('view-'+name).hidden=name!==view;$('tab-'+name).setAttribute('aria-selected',String(name===view));}if(view==='terminal')requestAnimationFrame(()=>S.fit?.fit());if(view==='intelligence'){refreshInventory().catch(e=>toast(e.message));if(!intelName)searchIntelligence().catch(e=>toast(e.message));}if(view==='team')refreshTeam().catch(e=>toast(e.message));if(view==='dens')S.densUI?.refresh({force:true}).catch(e=>toast(e.message));if(view==='evidence')refreshFiles().catch(e=>toast(e.message));if(view==='graph')S.graph?.refresh(S.eng);if(view==='hardware')refreshHardware().catch(e=>toast(e.message));if(view==='node')refreshNode().catch(e=>toast(e.message));if(view==='pet')petUI.refresh({quiet:true}).then(()=>petUI.refreshChat({quiet:true}));}
+function switchTab(view){S.view=view;for(const name of ['terminal','intelligence','dens','team','graph','jobs','evidence','hardware','node','pet']){$('view-'+name).hidden=name!==view;$('tab-'+name).setAttribute('aria-selected',String(name===view));}if(view==='terminal')requestAnimationFrame(()=>S.fit?.fit());if(view==='intelligence'){refreshInventory().catch(e=>toast(e.message));storeRepos().catch(()=>{});pollStoreTasks().catch(()=>{});if(!intelName)searchIntelligence().catch(e=>toast(e.message));}if(view==='team')refreshTeam().catch(e=>toast(e.message));if(view==='dens')S.densUI?.refresh({force:true}).catch(e=>toast(e.message));if(view==='evidence')refreshFiles().catch(e=>toast(e.message));if(view==='graph')S.graph?.refresh(S.eng);if(view==='hardware')refreshHardware().catch(e=>toast(e.message));if(view==='node')refreshNode().catch(e=>toast(e.message));if(view==='pet')petUI.refresh({quiet:true}).then(()=>petUI.refreshChat({quiet:true}));}
 document.querySelectorAll('[data-tab]').forEach(b=>{b.onclick=()=>switchTab(b.dataset.tab);b.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const tabs=[...document.querySelectorAll('[data-tab]')];const next=tabs[(tabs.indexOf(b)+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.focus();next.click();}});});
 async function refreshJobs(){
   if(!S.eng)return;const eid=S.eng;const [jobs,proposals]=await Promise.all([api('/api/jobs?engagement_id='+eid),api('/api/proposals?engagement_id='+eid)]);if(eid!==S.eng)return;

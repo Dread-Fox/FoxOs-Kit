@@ -237,3 +237,9 @@ html[data-theme=light]{color-scheme:light;--bg:#eaf0f5;--surface:#fff;--raised:#
 .inv-cat{display:flex;justify-content:space-between;gap:8px;font-size:12px;border-bottom:1px dotted var(--line);padding:2px 0;overflow-wrap:anywhere}
 .inv-chips{display:flex;flex-wrap:wrap;gap:5px;max-height:160px;overflow:auto}
 @media(max-width:900px){.inv-grid{grid-template-columns:1fr}}
+
+/* Tool store */
+.store-results{display:flex;flex-direction:column;gap:6px;max-height:420px;overflow:auto;margin:6px 0}
+.store-row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.store-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.store-task summary{cursor:pointer;font-size:12px}

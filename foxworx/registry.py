@@ -102,8 +102,13 @@ class Registry:
             if not item.get('version'):
                 item['version'] = info['version']
             if not item['curated']:
+                store_entry = store_catalog().get(item['name'])
                 if info['toolset_category']:
                     item['category'] = info['toolset_category']
+                elif store_entry and info['origin'] != 'package':
+                    item['category'] = store_entry['category']
+                    if item.get('description') == placeholder:
+                        item['description'] = store_entry['description']
                 elif info['origin'] in ('go', 'cargo', 'pdtm', 'pipx', 'snap', 'kali-container'):
                     item['category'] = {'kali-container': 'Kali container'}.get(info['origin'], 'User-installed · ' + info['origin'])
                 if item.get('description') == placeholder and info['summary']:
@@ -132,6 +137,11 @@ class Registry:
         p = Path(path)
         s = p.stat()
         return {'realpath':str(p.resolve()), 'inode':s.st_ino, 'size':s.st_size, 'mtime_ns':s.st_mtime_ns}
+
+def store_catalog() -> dict:
+    from .tool_store import BY_COMMAND  # local import: tool_store imports registry-independent modules only
+    return BY_COMMAND
+
 
 # Public discovery facade; implementation has no dependency on Registry.
 from .tool_discovery import ToolDiscovery  # noqa: E402,F401  (re-exported public API)

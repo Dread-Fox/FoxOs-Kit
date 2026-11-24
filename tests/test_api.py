@@ -31,7 +31,7 @@ def test_origin_and_csrf_required(logged):
 
 def test_session_inventory_and_no_automatic_jobs(logged):
     data=logged.get('/api/session').json()
-    assert data['version']=='3.7.0'
+    assert data['version']=='3.8.0'
     assert len(logged.get('/api/tools').json()['tools'])>72
     assert logged.get('/api/jobs').json()==[]
 
