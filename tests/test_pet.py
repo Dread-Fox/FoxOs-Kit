@@ -234,6 +234,6 @@ def test_invalid_optional_pet_data_cannot_disable_terminal_service(cfg):
     with TestClient(app,base_url=cfg.origin,client=('127.0.0.1',50000)) as c:
         assert c.post('/api/login',json={'token':cfg.local_token},headers={'Origin':cfg.origin}).status_code==200
         info=c.get('/api/session').json()
-        assert info['version']=='3.8.1'
+        assert info['version']=='3.8.2'
         assert c.get('/api/tools').status_code==200
         assert c.get('/api/pet').status_code==503

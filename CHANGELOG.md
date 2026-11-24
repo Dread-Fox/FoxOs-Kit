@@ -1,3 +1,7 @@
+## v3.8.2 — Tool store downloads avoid GitHub's API rate limit
+
+- ProjectDiscovery installs find the latest version through the `releases/latest` redirect instead of the GitHub API (60 calls/hour per IP, easily exhausted on shared networks); the API remains the fallback. Downloads are still checked against each release's checksums.
+
 ## v3.8.1 — Runs on systems without systemd or with an older Python
 
 - `scripts/install.sh` no longer stops without a systemd user session (Alpine, Void, Devuan, Artix, containers): it installs normally, skips the service unit and starts FOXWORX with the new `scripts/serve.sh start|stop|status|restart` (PID file and log in `~/.local/state/foxworx/`).

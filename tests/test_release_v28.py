@@ -7,12 +7,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_release_identity_is_coherent_across_cli_and_web():
-    assert __version__ == '3.8.1'
-    assert 'v3.8.1' in (ROOT/'static/index.html').read_text().lower()
-    assert 'v3.8.1' in (ROOT/'scripts/install.sh').read_text().lower()
+    assert __version__ == '3.8.2'
+    assert 'v3.8.2' in (ROOT/'static/index.html').read_text().lower()
+    assert 'v3.8.2' in (ROOT/'scripts/install.sh').read_text().lower()
     assert 'v3.3.3' not in (ROOT/'foxworx/cli.py').read_text().lower()  # CLI derives its version string
-    assert 'FoxWorx-DreadFoxHacker-v3.8.1' in (ROOT/'docs/INSTALL.md').read_text()
-    assert '## v3.8.1' in (ROOT/'CHANGELOG.md').read_text()
+    assert 'FoxWorx-DreadFoxHacker-v3.8.2' in (ROOT/'docs/INSTALL.md').read_text()
+    assert '## v3.8.2' in (ROOT/'CHANGELOG.md').read_text()
 
 
 def test_curated_adapter_library_covers_requested_cli_families():

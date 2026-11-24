@@ -1,4 +1,4 @@
-# FOXWORX Kali Workbench · v3.8.1
+# FOXWORX Kali Workbench · v3.8.2
 
 [![CI](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Dread-Fox/FoxWorx-DreadFoxHacker/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
