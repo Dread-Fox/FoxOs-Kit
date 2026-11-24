@@ -8,7 +8,7 @@ def cfg(tmp_path):
     return Settings(state=tmp_path/'state', secret='s'*48, local_token='t'*48, mode='local', reserve_bytes=0,
                     job_timeout=10, config_path=tmp_path/'settings.env',
                     adapter_policy_path=tmp_path/'no-admin-policy.json',
-                    den_enabled=False)
+                    den_enabled=False, auto_tool_paths=False)
 
 @pytest.fixture
 def store(cfg):
@@ -17,3 +17,9 @@ def store(cfg):
 @pytest.fixture
 def engagement(store):
     return store.put('engagement', 'local-operator', {'name':'Test lab', 'include':['127.0.0.1'], 'exclude':[], 'notes':''})
+
+
+@pytest.fixture(autouse=True)
+def no_host_toolset_index(monkeypatch):
+    # Hermetic and fast: don't read the test machine's package database. Toolset tests build their own index.
+    monkeypatch.setattr('foxworx.registry.ToolsetIndex', lambda: None)

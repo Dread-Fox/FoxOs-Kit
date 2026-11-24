@@ -146,6 +146,29 @@ $('tool-form').onsubmit=async e=>{e.preventDefault();$('tool-error').textContent
 // the adapter policy or the approved execution scope.
 let intelName=''; let intelOnline=false;
 const inteldoc=(tag,value,cls='')=>text(tag,value,cls);
+let inventoryLoaded=false;
+async function refreshInventory(force=false){
+  if(inventoryLoaded&&!force)return;
+  const inv=await api('/api/tools/inventory');inventoryLoaded=true;
+  const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!=null)n.textContent=txt;return n;};
+  const origins={package:'system packages',local:'/usr/local',user:'~/.local/bin',go:'Go',cargo:'Rust (cargo)',pdtm:'ProjectDiscovery pdtm',snap:'snap',pipx:'pipx','kali-container':'Kali container'};
+  $('inv-summary').textContent=`${inv.totals.executables.toLocaleString()} executables · ${inv.totals.security_tools.toLocaleString()} security tools · ${inv.categories.length} categories · ${inv.manager||'unknown'} packages`;
+  const ts=$('inv-toolsets');ts.replaceChildren();
+  if(!inv.toolsets.length)ts.append(el('p','hint','No packaged security toolset recognised (Kali, Parrot, BlackArch, Fedora Security Lab). Tools are still catalogued below.'));
+  for(const t of inv.toolsets){
+    const box=el('div','inv-toolset');
+    box.append(el('strong',null,t.label),el('span','hint',` ${t.installed}/${t.listed} tool packages · ${t.commands} commands${t.sets_installed?.length?` · ${t.sets_installed.length} category sets installed`:''}`));
+    const list=el('div','inv-cats');
+    for(const [name,c] of Object.entries(t.categories)){const row=el('div','inv-cat');row.append(el('span',null,name),el('span','hint',`${c.installed}/${c.listed}`));list.append(row);}
+    box.append(list);ts.append(box);
+  }
+  const og=$('inv-origins');og.replaceChildren();
+  og.replaceChildren(...Object.entries(inv.by_origin).sort((a,b)=>b[1]-a[1]).map(([k,v])=>{const r=el('div','inv-cat');r.append(el('span',null,origins[k]||k),el('span','hint',String(v)));return r;}));
+  $('inv-dirs').replaceChildren(...inv.search_dirs.map(d=>{const r=el('div','inv-cat');r.append(el('code',null,d.dir),el('span','hint',`${d.tools} · ${d.kind}`));return r;}));
+  $('inv-categories').replaceChildren(...inv.categories.map(c=>{const b=el('button','tiny',`${c.name} (${c.tools})`);b.type='button';b.onclick=()=>{$('intel-search').value=c.name;searchIntelligence().catch(e=>toast(e.message));};return b;}));
+  $('inv-projects-wrap').hidden=!inv.projects.length;
+  $('inv-projects').replaceChildren(...inv.projects.map(p=>{const r=el('div','inv-cat');r.append(el('code',null,p.path),el('span','hint',p.launchers.join(', ')||'no launcher found'));return r;}));
+}
 async function searchIntelligence(){
   const term=$('intel-search').value.trim();
   const result=await api('/api/tool-intelligence?query='+encodeURIComponent(term));
@@ -238,7 +261,7 @@ $('approval-form').onsubmit=async e=>{e.preventDefault();if(!$('approval-check')
   $('approval-dialog').close();switchTab('jobs');await refreshJobs();await selectJob(job.id);toast('Job accepted. Watch the recorded status and output; acceptance does not mean success.');
 }catch(err){$('approval-error').textContent=err.message;await refreshJobs();}finally{$('approve-run').disabled=!$('approval-check').checked;}};
 
-function switchTab(view){S.view=view;for(const name of ['terminal','intelligence','dens','team','graph','jobs','evidence','hardware','node','pet']){$('view-'+name).hidden=name!==view;$('tab-'+name).setAttribute('aria-selected',String(name===view));}if(view==='terminal')requestAnimationFrame(()=>S.fit?.fit());if(view==='intelligence'&&!intelName)searchIntelligence().catch(e=>toast(e.message));if(view==='team')refreshTeam().catch(e=>toast(e.message));if(view==='dens')S.densUI?.refresh({force:true}).catch(e=>toast(e.message));if(view==='evidence')refreshFiles().catch(e=>toast(e.message));if(view==='graph')S.graph?.refresh(S.eng);if(view==='hardware')refreshHardware().catch(e=>toast(e.message));if(view==='node')refreshNode().catch(e=>toast(e.message));if(view==='pet')petUI.refresh({quiet:true}).then(()=>petUI.refreshChat({quiet:true}));}
+function switchTab(view){S.view=view;for(const name of ['terminal','intelligence','dens','team','graph','jobs','evidence','hardware','node','pet']){$('view-'+name).hidden=name!==view;$('tab-'+name).setAttribute('aria-selected',String(name===view));}if(view==='terminal')requestAnimationFrame(()=>S.fit?.fit());if(view==='intelligence'){refreshInventory().catch(e=>toast(e.message));if(!intelName)searchIntelligence().catch(e=>toast(e.message));}if(view==='team')refreshTeam().catch(e=>toast(e.message));if(view==='dens')S.densUI?.refresh({force:true}).catch(e=>toast(e.message));if(view==='evidence')refreshFiles().catch(e=>toast(e.message));if(view==='graph')S.graph?.refresh(S.eng);if(view==='hardware')refreshHardware().catch(e=>toast(e.message));if(view==='node')refreshNode().catch(e=>toast(e.message));if(view==='pet')petUI.refresh({quiet:true}).then(()=>petUI.refreshChat({quiet:true}));}
 document.querySelectorAll('[data-tab]').forEach(b=>{b.onclick=()=>switchTab(b.dataset.tab);b.addEventListener('keydown',e=>{if(['ArrowLeft','ArrowRight'].includes(e.key)){e.preventDefault();const tabs=[...document.querySelectorAll('[data-tab]')];const next=tabs[(tabs.indexOf(b)+(e.key==='ArrowRight'?1:tabs.length-1))%tabs.length];next.focus();next.click();}});});
 async function refreshJobs(){
   if(!S.eng)return;const eid=S.eng;const [jobs,proposals]=await Promise.all([api('/api/jobs?engagement_id='+eid),api('/api/proposals?engagement_id='+eid)]);if(eid!==S.eng)return;

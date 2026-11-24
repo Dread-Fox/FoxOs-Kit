@@ -53,3 +53,20 @@ After installing development dependencies:
 ```
 
 This benchmark reports index construction, warm query latency, response sizes and host information for synthetic inventories. It does not time filesystem discovery, local metadata enrichment, model inference or real assessment tools. Target-side ARM64 performance requires separate measurement.
+
+## v3.7.0: toolkit-aware catalog
+
+FOXWORX now explains every executable it finds: owning package, version, description, where it came from
+(system package, /usr/local, ~/.local/bin, Go, Rust, pdtm, snap, pipx, FoxOS Kali container) and, when it belongs
+to a security toolset, the toolset and category, for example `Kali · Password cracking` or `BlackArch · Scanner`.
+
+| Toolset | Source of categories |
+|---|---|
+| Kali | `kali-tools-*` category metapackages (installed or available) and the Kali menu's categories |
+| Parrot | `parrot-tools-*` category metapackages |
+| BlackArch | `blackarch-*` pacman groups |
+| Fedora Security Lab | the `security-lab` dnf group |
+
+Tools from any other source are still catalogued by package, origin and description. The inventory is at
+`GET /api/tools/inventory` and in the Tool Intelligence tab. Package data is read from the package database
+only (dpkg, pacman or rpm); no tool is executed to build it.

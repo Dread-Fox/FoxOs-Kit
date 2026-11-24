@@ -63,6 +63,9 @@ class Settings:
     max_terminals: int = 4
     reserve_bytes: int = 256 * 1024 * 1024
     extra_paths: tuple[str, ...] = ()
+    # Also catalog tools in common user/toolkit folders (Go, Rust, pdtm, snaps, pipx, ~/.local/bin, the
+    # FoxOS Kali container exports). Searched AFTER the system folders, so they never shadow system tools.
+    auto_tool_paths: bool = True
     shell: str = '/bin/bash'
     config_path: Path = field(default_factory=lambda: DEFAULT_CONFIG)
     adapter_policy_path: Path = Path('/etc/foxworx/adapter-policy.json')
@@ -174,7 +177,14 @@ class Settings:
 
     @property
     def tool_path(self) -> str:
-        return SAFE_PATH + (':' + ':'.join(self.extra_paths) if self.extra_paths else '')
+        parts = SAFE_PATH.split(':') + list(self.extra_paths)
+        if self.auto_tool_paths:
+            parts += [d for d in auto_tool_dirs() if Path(d).is_dir()]
+        seen: list[str] = []
+        for d in parts:
+            if d and d not in seen:
+                seen.append(d)
+        return ':'.join(seen)
 
     @classmethod
     def load(cls, path: Path | None = None) -> 'Settings':
@@ -203,6 +213,7 @@ class Settings:
             max_terminals=int(val('FOXWORX_MAX_TERMINALS', '4')),
             reserve_bytes=int(val('FOXWORX_RESERVE_MIB', '256')) * 1024 * 1024,
             extra_paths=tuple(x for x in val('FOXWORX_EXTRA_TOOL_PATHS').split(':') if x),
+            auto_tool_paths=val('FOXWORX_AUTO_TOOL_PATHS','1').lower() not in ('0','false','no','off'),
             # Bandit B604 false positive: dataclass field named shell, not subprocess shell=True.
             shell=val('FOXWORX_SHELL', '/bin/bash'), config_path=path,  # nosec B604
             adapter_policy_path=Path(val('FOXWORX_ADAPTER_POLICY','/etc/foxworx/adapter-policy.json')),
@@ -224,6 +235,13 @@ class Settings:
         )
         cfg.validate()
         return cfg
+
+
+def auto_tool_dirs() -> list[str]:
+    """Common tool folders outside the system PATH (only existing ones are used)."""
+    home = Path.home()
+    return [str(home / '.local/bin'), str(home / 'go/bin'), str(home / '.cargo/bin'), str(home / '.pdtm/go/bin'),
+            '/snap/bin', '/usr/local/go/bin', '/opt/foxos/pipx/bin']
 
 
 def child_environment(cfg: Settings) -> dict[str, str]:

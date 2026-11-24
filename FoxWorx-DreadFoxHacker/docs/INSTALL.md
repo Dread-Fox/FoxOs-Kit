@@ -1,6 +1,6 @@
 # Installation — local port 8765; no Cloudflare required
 
-**Current release: FoxWorx-DreadFoxHacker-v3.6.0.** The default installation requires sign-in, works locally without Cloudflare, and optionally accepts one configured public HTTPS hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for sign-in, operator accounts, upgrades and remote access.
+**Current release: FoxWorx-DreadFoxHacker-v3.7.0.** The default installation requires sign-in, works locally without Cloudflare, and optionally accepts one configured public HTTPS hostname without disabling localhost. See [LOCAL-SERVICE.md](LOCAL-SERVICE.md) for sign-in, operator accounts, upgrades and remote access.
 
 
 ## 1. Choose the host account
@@ -13,10 +13,10 @@ Keep the host powered, cooled and backed by reliable storage. Job logs and artif
 
 ## 2. Extract and install
 
-Extract the release ZIP under your home directory. The top-level directory is `FoxWorx-DreadFoxHacker-v3.6.0`. Use a path without whitespace, quotes, percent signs or backslashes; the installer validates this to avoid systemd quoting problems. Do not move it after installation without rerunning the installer.
+Extract the release ZIP under your home directory. The top-level directory is `FoxWorx-DreadFoxHacker-v3.7.0`. Use a path without whitespace, quotes, percent signs or backslashes; the installer validates this to avoid systemd quoting problems. Do not move it after installation without rerunning the installer.
 
 ```bash
-cd ~/FoxWorx-DreadFoxHacker-v3.6.0
+cd ~/FoxWorx-DreadFoxHacker-v3.7.0
 bash scripts/install.sh --preflight # no modifications
 bash scripts/install.sh
 ```

@@ -9,6 +9,7 @@ import subprocess
 import time
 import threading
 from .config import Settings
+from .toolsets import ToolsetIndex
 
 NAME = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.+-]{0,149}$')
 CATALOG = json.loads(Path(__file__).with_name('catalog.json').read_text())
@@ -19,6 +20,8 @@ class Registry:
         self.items: dict[str, dict] = {}
         self.scanned = 0.0
         self._scan_lock=threading.RLock()
+        # Toolkit knowledge (package owner, toolset + category, origin) from the package database; optional.
+        self.toolsets: ToolsetIndex | None = ToolsetIndex()
 
     def scan(self) -> list[dict]:
         with self._scan_lock:
@@ -70,9 +73,41 @@ class Registry:
                             items[name]['note'] = 'Mode inferred from desktop entry; verify any headless alternative.'
                 except (OSError, ValueError, KeyError, configparser.Error):
                     pass
+        self._annotate(items)
         self.items = items
         self.scanned = time.time()
         return self.list()
+
+    def _annotate(self, items: dict) -> None:
+        """Add toolset/category, origin, owning package and a description to every discovered tool."""
+        index = self.toolsets
+        if index is None:
+            return
+        try:
+            index.data()
+        except Exception:  # nosec B110 - package metadata is best-effort; the inventory still works without it
+            return
+        placeholder = 'Discovered executable; no specialized adapter'
+        for item in items.values():
+            if not item.get('installed') or not item.get('path'):
+                continue
+            try:
+                info = index.describe(item['path'], item.get('package', ''))
+            except Exception:  # nosec B112 - one odd file must not break the scan
+                continue
+            item['origin'] = info['origin']
+            item['toolsets'] = info['toolsets']
+            if not item.get('package'):
+                item['package'] = info['package']
+            if not item.get('version'):
+                item['version'] = info['version']
+            if not item['curated']:
+                if info['toolset_category']:
+                    item['category'] = info['toolset_category']
+                elif info['origin'] in ('go', 'cargo', 'pdtm', 'pipx', 'snap', 'kali-container'):
+                    item['category'] = {'kali-container': 'Kali container'}.get(info['origin'], 'User-installed · ' + info['origin'])
+                if item.get('description') == placeholder and info['summary']:
+                    item['description'] = info['summary']
 
     def list(self) -> list[dict]:
         if not self.scanned:
