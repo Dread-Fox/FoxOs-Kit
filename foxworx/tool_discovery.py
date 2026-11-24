@@ -14,7 +14,7 @@ from collections import defaultdict
 from pathlib import Path
 
 STOP_WORDS=set('a an and are as at be by can could do for from how i in is it me of on or please that the this to tool tools use using want what which with would'.split())
-ALIASES={'website':('web','http'),'websites':('web','http'),'domain':('dns',),
+ALIASES={'website':('web','http'),'websites':('web','http'),'domain':('dns',),'crack':('recovery',),
          'certificates':('certificate','tls'),'ports':('port','network')}
 LOOKUP_PARAMETERS={'type':'object','properties':{
     'query':{'type':'string','description':'Task description or executable name.'},
@@ -25,8 +25,20 @@ LOOKUP_PARAMETERS={'type':'object','properties':{
     'required':['query'],'additionalProperties':False}
 
 
+def stem(word):
+    """Light suffix stripping so 'cracking'/'cracked' match 'crack' and 'scanning' matches 'scan'."""
+    for suffix in ('ions','ion','ing','ers','er','ed','es','s'):
+        if word.endswith(suffix) and len(word)-len(suffix)>=3:
+            base=word[:-len(suffix)]
+            if suffix in ('ing','ed','er','ers') and len(base)>=4 and base[-1]==base[-2] and base[-1] in 'bdgmnprt':
+                base=base[:-1]  # scann -> scan, but sniff stays sniff
+            return base
+    return word
+
+
 def tokens(value):
-    return set(re.findall(r'[a-z0-9]+',str(value).casefold()))-STOP_WORDS
+    words=set(re.findall(r'[a-z0-9]+',str(value).casefold()))-STOP_WORDS
+    return {stem(w) for w in words}
 
 
 def clean(value,limit):
@@ -134,14 +146,21 @@ class ToolDiscovery:
                 entries[name]={'name':name,'description':description,'summary':summary,'category':category,
                     'mode':mode,'version':clean(row.get('version') or meta.get('version',''),80),
                     'installed':True,'metadata_sources':[meta['source']] if meta.get('source') else [],
+                    'package':clean(row.get('package','') or meta.get('package',''),80),
                     'note':clean(row.get('note',''),180)}
                 categories[category]+=1
                 fields=((name,8),(category,4),(description+' '+summary,3),(row.get('package','') or meta.get('package',''),1))
+                # Curated tools have FOXWORX workflows, notes and safety handling: prefer them when they match, so a
+                # large toolkit (hundreds of similar web/network tools) doesn't crowd them out of the shortlist.
+                bonus=3 if row.get('curated') else 2 if (row.get('toolsets') or row.get('origin') in
+                       ('go','cargo','pdtm','pipx','kali-container')) else 0
+                if name==(row.get('package','') or meta.get('package','')):bonus+=2  # a package's main command
+                if any(t.get('category')=='Top 10' for t in row.get('toolsets') or []):bonus+=3  # Kali's flagship tools
                 for value,weight in fields:
-                    for term in tokens(value):postings[term][name]=postings[term].get(name,0)+weight
+                    for term in tokens(value):postings[term][name]=postings[term].get(name,0)+weight+bonus
             self._generation+=1
             self._snapshot={'entries':entries,'names':sorted(entries,key=str.casefold),'postings':dict(postings),
-                'categories':dict(sorted(categories.items(),key=lambda p:(-p[1],p[0]))[:20]),
+                'categories':dict(sorted(categories.items(),key=lambda p:(-p[1],p[0]))[:80]),
                 'revision':f'{self._instance}:{self._generation}','scanned_at':self.registry.scanned}
             return self._snapshot
 
@@ -201,7 +220,15 @@ class ToolDiscovery:
         candidates=list(scores) if terms else (snap['names'] if not query.strip() else [])
         candidates=[name for name in candidates if (not category or snap['entries'][name]['category']==category)
                     and (not mode or snap['entries'][name]['mode']==mode)]
-        if terms:candidates.sort(key=lambda name:(-scores[name],name.casefold()))
+        # Tools matching more of the request's words rank higher than ones matching a single word strongly.
+        if terms:
+            candidates.sort(key=lambda name:(-scores[name]*len(matches[name]),-scores[name],name.casefold()))
+            # Diversity: at most two commands per package near the top (e.g. John's 30 *2john helpers), the rest follow.
+            seen=defaultdict(int);top=[];rest=[]
+            for name in candidates:
+                pkg=snap['entries'][name].get('package') or name
+                (top if seen[pkg]<2 else rest).append(name);seen[pkg]+=1
+            candidates=top+rest
         result['total_matches']=len(candidates)
         for name in candidates[offset:offset+limit]:
             entry={**snap['entries'][name],'match_reasons':sorted(matches[name])[:8]}

@@ -29,6 +29,7 @@ Default file: `~/.config/foxworx-workbench/settings.env`. Use `bash scripts/conf
 | FOXWORX_MAX_TERMINALS | New ARM64 default `4`; new x86-64 default `8`; supported 1–12 node-wide sessions. |
 | FOXWORX_RESERVE_MIB | New ARM64 default `256`; new x86-64 default `1024`; minimum free space before a managed job starts. Not a live disk quota. |
 | FOXWORX_EXTRA_TOOL_PATHS | Colon-separated additional absolute executable directories, e.g. `/home/foxoperator/go/bin`. Restart then Refresh. |
+| FOXWORX_AUTO_TOOL_PATHS | `1`. Also catalog tools in `~/.local/bin`, `~/go/bin`, `~/.cargo/bin`, `~/.pdtm/go/bin`, `/snap/bin`, `/usr/local/go/bin` and the FoxOS pipx folder when they exist, after the system folders. `0` restores the system-only search path. |
 | FOXWORX_SHELL | `/bin/bash`; an installed executable interactive shell. Its startup files may affect behavior. |
 | FOXWORX_COMPANION_FILE | Empty (off). Path of the desktop DreadFox widget state file, normally `~/h1/data/pet.json`. Only aggregate pet/memory values are written. |
 | FOXWORX_COMPANION_OWNER | Operator id whose pet is exported to the desktop widget (for example `local-operator`). |

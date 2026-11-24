@@ -757,6 +757,34 @@ def create_app(cfg: Settings | None = None, *, _allow_root_for_tests: bool = Fal
         try: return conversation().clear(owner)
         except ValueError as exc: raise HTTPException(409,str(exc)) from exc
 
+    def tool_inventory() -> dict:
+        from collections import Counter
+        from .config import auto_tool_dirs, SAFE_PATH
+        items = [i for i in registry.list() if i.get('installed')]
+        index = registry.toolsets
+        data = index.data() if index is not None else {'manager': '', 'toolsets': []}
+        user_origins = ('go', 'cargo', 'pdtm', 'pipx', 'snap', 'kali-container', 'user', 'local')
+        security = [i for i in items if i.get('toolsets') or i.get('curated') or i.get('origin') in user_origins]
+        auto = set(auto_tool_dirs())
+        dirs = []
+        for d in cfg.tool_path.split(':'):
+            n = sum(1 for i in items if (i.get('path') or '').rsplit('/', 1)[0] == d)
+            dirs.append({'dir': d, 'tools': n, 'kind': 'system' if d in SAFE_PATH.split(':') else 'auto' if d in auto else 'configured'})
+        per_toolset = Counter(t for i in items for t in {x['toolset'] for x in i.get('toolsets', [])})
+        return {'manager': data['manager'], 'scanned_at': registry.scanned,
+                'toolsets': [{**t, 'commands': per_toolset.get(t['label'], 0)} for t in data['toolsets']],
+                'totals': {'executables': len(items), 'security_tools': len(security),
+                           'categorized': sum(1 for i in items if i.get('category') != 'System / additional')},
+                'by_origin': dict(Counter(i.get('origin', 'package') for i in items)),
+                'categories': [{'name': k, 'tools': v} for k, v in
+                               Counter(i['category'] for i in items if i.get('category') != 'System / additional').most_common(120)],
+                'search_dirs': dirs, 'projects': index.projects() if index is not None else []}
+
+    @app.get('/api/tools/inventory')
+    async def tools_inventory(request: Request):
+        await actor(request)
+        return await asyncio.to_thread(tool_inventory)
+
     @app.get('/api/tools')
     async def tools(request: Request):
         await actor(request)

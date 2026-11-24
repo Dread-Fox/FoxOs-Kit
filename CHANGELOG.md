@@ -1,3 +1,13 @@
+## v3.7.0 — Full tool catalog on any distro and any toolkit
+
+All v3.6.0 behaviour is unchanged; the catalog is richer and searches more places.
+
+- **Toolkit-aware catalog (new `foxworx/toolsets.py`):** every installed executable gets its owning package, version, description, origin and security toolset + category, read from the package database (nothing is executed). Recognises Kali (category metapackages, installed or merely available, plus the Kali menu's ATT&CK-style categories, which win for a tool's main purpose), Parrot (`parrot-tools-*`), BlackArch (`blackarch-*` pacman groups) and Fedora Security Lab (dnf group). Works on dpkg, pacman and rpm systems; symlinked commands (e.g. `msfconsole`) resolve to their real package. Cached until the package database changes.
+- **Searches more places automatically:** `~/.local/bin`, `~/go/bin`, `~/.cargo/bin`, `~/.pdtm/go/bin`, `/snap/bin`, `/usr/local/go/bin` and the FoxOS pipx folder are included when they exist (`FOXWORX_AUTO_TOOL_PATHS`, default on), always after the system folders so nothing shadows a system tool. Jobs get the same PATH, so the agent can run these tools.
+- **`GET /api/tools/inventory`** and a **Tool inventory** panel in Tool Intelligence: toolsets with per-category installed/listed counts, totals by origin, searched folders, clickable categories, and tool projects in `/opt` and `~/tools`.
+- **Better agent shortlists on large toolkits:** light stemming (cracking→crack, scanning→scan, inspection→inspect), ranking by how many of the request's words a tool matches, a small preference for curated, toolset and Kali Top 10 tools, a package's main command, and at most two commands per package near the top (e.g. John's `*2john` helpers no longer crowd out `john` and `hashcat`). Category lists keep up to 80 categories.
+- Tests: `tests/test_toolsets.py` (dpkg/Kali incl. menu and symlinks, pacman/BlackArch, rpm/Fedora Security Lab, origins, projects, registry + inventory API, auto tool paths). The test suite no longer reads the host's package database.
+
 ## v3.6.0 — Dens: encrypted peer-to-peer workspaces between DreadFox installs
 
 All v3.5.0 behaviour is unchanged; dens are additive and can be turned off (`FOXWORX_DEN_ENABLED=0`).
