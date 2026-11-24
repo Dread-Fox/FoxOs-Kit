@@ -215,8 +215,9 @@ if [ "$TOOLKIT" != none ]; then
   else bash "$KIT/bin/foxos-tools" toolkit --set "$TOOLKIT" --yes; fi \
     || say "  toolset not installed now — run later: foxos-tools toolkit"
   bash "$KIT/bin/foxos-tools" timer >/dev/null 2>&1 && say "  weekly toolset updates on (new Kali tools are added automatically)"
-  systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true  # pick up new tool paths
 fi
+# Let FoxWorx's agent use tools in folders outside the system PATH (~/go/bin, ~/.cargo/bin, /snap/bin, …).
+[ "$FOXWORX" = 1 ] && bash "$KIT/bin/foxos-tools" expose 2>/dev/null | sed 's/^/  /' || true
 
 say "toolkit catalog…"; toolkit >/dev/null 2>&1 || true
 say "base install done. Desktop: FoxWorx · DreadFox Companion · Bounty Radar"

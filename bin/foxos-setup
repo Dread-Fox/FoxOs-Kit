@@ -91,7 +91,7 @@ if command -v foxos-tools >/dev/null; then
   tk=$(sed -n 's/^TOOLKIT_LABEL=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
   if [ -n "$tk" ]; then ok "security toolset: $tk (checked weekly for updates)"
   else
-    found=$(FOXOS_TOOLS_NO_MAIN=1 bash -c '. "$(command -v foxos-tools)"; toolset_scan' 2>/dev/null | cut -d'|' -f2)
+    found=$(FOXOS_TOOLS_NO_MAIN=1 bash -c '. "$(command -v foxos-tools)"; toolsets' 2>/dev/null | cut -d'|' -f2)
     if [ -n "$found" ]; then
       ok "security toolset(s) found: $(printf '%s' "$found" | paste -sd ';' - | sed 's/;/; /g')"
       foxos-tools toolkit --yes >/dev/null && foxos-tools timer >/dev/null
@@ -101,6 +101,11 @@ if command -v foxos-tools >/dev/null; then
       if ask "Install the standard toolset (headless) now?" Y; then foxos-tools toolkit --set headless --yes && foxos-tools timer >/dev/null
       elif ask "Install the larger 'default' toolset instead?" N; then foxos-tools toolkit --set default --yes && foxos-tools timer >/dev/null; fi
     fi
+  fi
+  hidden=$(foxos-tools inventory 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | sed -n "s/.*FoxWorx's agent can't see: \(.*\) — fix.*/\1/p")
+  if [ -n "$hidden" ]; then
+    say "Tools in$hidden aren't visible to FoxWorx's agent."
+    ask "Let FoxWorx use the tools in those folders?" Y && foxos-tools expose
   fi
   missing=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*missing: \([0-9]*\) core.*/\1/p')
   if [ "${missing:-0}" != 0 ] && ask "Fill $missing missing core DreadFox tool(s) individually?" Y; then foxos-tools install --core --yes; fi

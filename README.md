@@ -45,6 +45,8 @@ if found, installs nothing:
 | Recognised toolset | Detected by | Weekly update |
 |---|---|---|
 | Kali (`kali-linux-headless/default/large/everything`) | installed metapackage | re-applies the metapackage (new tools) |
+| Kali tool categories (`kali-tools-web`, `-passwords`, … any of the 27) | installed category sets, with installed/listed counts | re-applies every installed category set (new tools) |
+| Parrot tool categories (`parrot-tools-*`) | installed category sets | re-applies them |
 | Parrot Security (`parrot-tools-full`, `parrot-tools*`) | installed metapackage | re-applies the metapackage (new tools) |
 | BlackArch (also Athena OS) | `blackarch` repo + 20+ tools from its group | `pacman -Syu` |
 | Fedora Security Lab | `security-lab` group installed | `dnf group upgrade` |
@@ -56,6 +58,9 @@ Kali container (distrobox + podman) and every tool it adds that your system lack
 `~/.local/bin`. Your system's own packages are never replaced. A weekly update re-applies the toolset, so **new
 tools Kali adds show up automatically**, and FoxWorx's agent discovers them on its own.
 ```bash
+foxos-tools inventory                  # everything installed: toolsets + categories, tool commands, tool folders
+                                       # outside the package manager, /opt and ~/tools projects, what FoxWorx sees
+foxos-tools expose                     # let FoxWorx's agent use tools in ~/go/bin, ~/.cargo/bin, /snap/bin, pdtm…
 foxos-tools check                      # the DreadFox tools: present or missing
 foxos-tools toolkit                    # detect a toolset; install Kali's headless set only if none
 foxos-tools toolkit --set default      # make sure a specific Kali set is present: headless, default, large, everything

@@ -11,6 +11,12 @@
 #        installs nothing if one is found. Otherwise (or with --set) Kali's standard set (headless). On Kali:
 #        Kali's metapackage via apt. Anywhere else: an official Kali container (distrobox + podman);
 #        every tool it adds that the host lacks becomes a command in ~/.local/bin. Host packages untouched.
+#   foxos-tools inventory
+#        everything installed: toolsets and their categories, tool commands, tool folders outside the
+#        package manager (~/go/bin, ~/.cargo/bin, /snap/bin, pdtm…), /opt and ~/tools projects, and which
+#        of them FoxWorx's agent can see
+#   foxos-tools expose
+#        add those tool folders to FoxWorx's search path so its agent can use them
 #   foxos-tools update [--auto]
 #        re-apply the toolkit to pull in tools Kali has added since, then expose new ones
 #   foxos-tools timer [--off]
@@ -75,7 +81,13 @@ aircrack-ng|extra|pkg kali:aircrack-ng|Wi-Fi auditing
 '
 
 rows() { printf '%s\n' "$TOOLS" | grep '|' ; }
-have() { command -v "$1" >/dev/null 2>&1 || [ -x "$BIN/$1" ]; }
+# Common places tools get installed outside the system PATH (Go, Rust, pdtm, snaps, user installs).
+TOOL_DIRS="$HOME/.local/bin $HOME/go/bin $HOME/.cargo/bin $HOME/.pdtm/go/bin /snap/bin /usr/local/go/bin /opt/foxos/pipx/bin"
+have() {
+  command -v "$1" >/dev/null 2>&1 && return 0
+  [ -x "$BIN/$1" ] && return 0
+  local d; for d in $TOOL_DIRS; do [ -x "$d/$1" ] && [ ! -d "$d/$1" ] && return 0; done; return 1
+}
 
 # ------------------------------------------------------------------ check
 cmd_check() {
@@ -92,7 +104,7 @@ cmd_check() {
   say "missing: $miss_core core, $miss_extra extra"
   [ $miss_core -gt 0 ] && say "fill core gaps:  foxos-tools install --core"
   [ $miss_extra -gt 0 ] && say "everything:      foxos-tools install --all   and the standard toolset: foxos-tools toolkit"
-  local found; found=$(toolset_scan)
+  local found; found=$(toolsets)
   if [ -n "$found" ]; then say "security toolsets detected:"; printf '%s\n' "$found" | while IFS='|' read -r id label upd; do printf '    • %s\n' "$label"; done
   else say "no security toolset detected — install the standard one: foxos-tools toolkit"; fi
   return 0
@@ -207,6 +219,35 @@ COVERAGE_MIN=${FOXOS_COVERAGE_MIN:-60}
 coverage() { local n=0 t=0 x; for x in $REF_TOOLS; do t=$((t+1)); have "$x" && n=$((n+1)); done; echo "$n $t"; }
 dpkg_any() { dpkg-query -W -f='${Package} ${Status}\n' "$@" 2>/dev/null | awk '/install ok installed/{print $1}'; }
 
+# Installed tool packages listed by a metapackage (direct deps; category metas expanded one level).
+meta_deps() {
+  apt-cache depends --no-recommends --no-suggests "$@" 2>/dev/null | awk '/ Depends:/{print $2}' | tr -d '<>' | sort -u
+}
+installed_of() { [ $# -eq 0 ] && { echo 0; return; }; dpkg-query -W -f='${Status}\n' "$@" 2>/dev/null | grep -c 'install ok installed'; }
+# "installed/listed" for a metapackage family pattern, e.g. 'kali-tools-*'
+family_counts() {
+  local metas deps
+  metas=$(dpkg_any "$1"); [ -n "$metas" ] || { echo ""; return; }
+  # shellcheck disable=SC2086
+  deps=$(meta_deps $metas | grep -v -E '^(kali-tools-|parrot-tools-|kali-linux-)')
+  # shellcheck disable=SC2086
+  echo "$(echo "$metas" | wc -l) $(installed_of $deps) $(echo "$deps" | grep -c .)"
+}
+# Is a Kali metapackage effectively present? Installed, or 95%+ of its tools installed some other way
+# (for example through the kali-tools-* category sets).
+meta_satisfied() {
+  local m=$1 deps sub all n t
+  dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && return 0
+  command -v apt-cache >/dev/null || return 1
+  deps=$(meta_deps "$m"); sub=$(printf '%s\n' "$deps" | grep -E '^kali-tools-')
+  # shellcheck disable=SC2086
+  all=$( { printf '%s\n' "$deps" | grep -v -E '^(kali-tools-|kali-linux-|kali-system-|kali-desktop-)'; [ -n "$sub" ] && meta_deps $sub | grep -v -E '^kali-'; } | sort -u | grep .)
+  t=$(echo "$all" | grep -c .); [ "$t" -gt 0 ] || return 1
+  # shellcheck disable=SC2086
+  n=$(installed_of $all)
+  [ $((100 * n / t)) -ge 95 ]
+}
+
 # Every security toolset detected on this machine, one per line:  id|label|update
 #   update = apt:PKG | pacman | dnf-group:GROUP | container | remind:TEXT
 toolset_scan() {
@@ -217,6 +258,13 @@ toolset_scan() {
     ?*) echo "kali|Kali $m|apt:$m" ;;
   esac
   if command -v dpkg-query >/dev/null; then
+    local fc nm ni nt
+    fc=$(family_counts 'kali-tools-*')
+    if [ -n "$fc" ]; then read -r nm ni nt <<< "$fc"
+      [ "${nt:-0}" -gt 0 ] && echo "kali-categories|Kali tool categories: $nm sets, $ni of $nt tool packages installed|apt-family:kali-tools-*"; fi
+    fc=$(family_counts 'parrot-tools-*')
+    if [ -n "$fc" ]; then read -r nm ni nt <<< "$fc"
+      [ "${nt:-0}" -gt 0 ] && echo "parrot-categories|Parrot tool categories: $nm sets, $ni of $nt tool packages installed|apt-family:parrot-tools-*"; fi
     p=$(dpkg_any 'parrot-tools*' | sort | head -1); [ -n "$(dpkg_any parrot-tools-full)" ] && p=parrot-tools-full
     [ -n "$p" ] && echo "parrot|Parrot Security ($p)|apt:$p"
     n=$(dpkg_any 'backbox-*' | wc -l); [ "$n" -gt 0 ] && echo "backbox|BackBox ($n backbox packages)|remind:sudo apt update && sudo apt full-upgrade"
@@ -236,6 +284,14 @@ toolset_scan() {
     imgs=$($rt images --format '{{.Repository}}' 2>/dev/null | grep -E 'nwodtuhs/exegol|parrotsec/security|blackarchlinux/blackarch' | sort -u | head -3 | tr '\n' ' ')
     [ -n "$imgs" ] && echo "container-$rt|container images via $rt: ${imgs% }|remind:update those images with $rt pull"
   done
+  return 0
+}
+
+# Named toolsets first; a hand-built collection (60%+ of the reference tools) only when none is recognised.
+toolsets() {
+  local found n t
+  found=$(toolset_scan)
+  if [ -n "$found" ]; then printf '%s\n' "$found"; return 0; fi
   read -r n t <<< "$(coverage)"
   [ $((100 * n / t)) -ge "$COVERAGE_MIN" ] && echo "collection|existing tool collection ($n/$t common tools)|remind:foxos-tools install --all (or adopt Kali's self-updating set: foxos-tools toolkit --set headless)"
   return 0
@@ -247,7 +303,7 @@ cmd_toolkit() {
     [ "$prev" = --set ] && set=$a; prev=$a; done
   if [ -z "$set" ]; then
     # automatic: any recognised toolset counts; only install Kali's if nothing is there
-    found=$(toolset_scan)
+    found=$(toolsets)
     if [ -n "$found" ]; then
       say "security toolset(s) already on this machine:"
       printf '%s\n' "$found" | while IFS='|' read -r id label upd; do printf '    • %s\n' "$label"; done
@@ -264,6 +320,11 @@ cmd_toolkit() {
   fi
   meta="kali-linux-$set"
   [ "$(rank "$meta")" -gt 0 ] || { say "unknown toolkit '$set' (headless | default | large | everything)"; return 1; }
+  if [ "$FOXOS_KALI" = 1 ] && meta_satisfied "$meta"; then
+    say "$meta is effectively present: 95%+ of its tools are installed (e.g. via kali-tools-* category sets)"
+    state_set TOOLKIT kali; state_set TOOLKIT_UPDATE "apt-family:kali-tools-*"; state_set TOOLKIT_LABEL "Kali tool categories (covers $meta)"
+    return 0
+  fi
   found=$(kali_meta_installed)
   if [ -n "$found" ] && [ "$(rank "${found#container:}")" -ge "$(rank "$meta")" ]; then
     say "Kali ${found#container:} already present (covers $meta)"
@@ -351,6 +412,12 @@ cmd_update() {
            say "refreshing $label (adds tools added to ${upd#apt:} since your last update)"
            pm_update; pm_install "${upd#apt:}"
            say "for newer versions of the tools themselves run: sudo apt full-upgrade" ;;
+    apt-family:*) needs_sudo && return 0
+           local fam; fam=$(dpkg_any "${upd#apt-family:}" | tr '\n' ' ')
+           say "refreshing $label: re-applying $(echo $fam | wc -w) category sets (adds tools added to them since)"
+           # shellcheck disable=SC2086
+           pm_update; pm_install $fam
+           say "for newer versions of the tools themselves run: sudo apt full-upgrade" ;;
     pacman) needs_sudo && return 0; say "updating $label"; run sudo pacman -Syu --noconfirm ;;
     dnf-group:*) needs_sudo && return 0; say "updating $label"; run sudo dnf group upgrade -y "${upd#dnf-group:}" ;;
     container)
@@ -383,6 +450,80 @@ cmd_timer() {
   run systemctl --user enable --now foxos-tools-update.timer && say "weekly tool updates on (foxos-tools-update.timer)"
 }
 
+# ------------------------------------------------------------------ inventory / expose
+SE="$HOME/.config/foxworx-workbench/settings.env"
+SAFE_PATH_DIRS="/usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin /bin"
+fw_extra() { [ -f "$SE" ] && sed -n 's/^FOXWORX_EXTRA_TOOL_PATHS="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$SE" | tail -1; }
+fw_sees() { local d=$1 x; for x in $SAFE_PATH_DIRS $(fw_extra | tr ':' ' '); do [ "$x" = "$d" ] && return 0; done; return 1; }
+exec_count() { local n=0 f; for f in "$1"/*; do [ -f "$f" ] && [ -x "$f" ] && n=$((n+1)); done; echo $n; }
+exec_names() { local f out=(); for f in "$1"/*; do [ -f "$f" ] && [ -x "$f" ] && out+=("${f##*/}"); done; printf '%s ' "${out[@]:0:${2:-10}}"; }
+
+cmd_inventory() {
+  local found m deps n t pk cmds d c projects=0
+  say "$FOXOS_NAME · security tool inventory"
+  echo; echo "Toolsets:"
+  found=$(toolsets)
+  if [ -n "$found" ]; then printf '%s\n' "$found" | while IFS='|' read -r id label upd; do printf '  • %s\n' "$label"; done
+  else echo "  (none recognised)"; fi
+  if command -v dpkg-query >/dev/null; then
+    for fam in 'kali-tools-*' 'parrot-tools-*'; do
+      metas=$(dpkg_any "$fam"); [ -n "$metas" ] || continue
+      echo; echo "By category (${fam%-\*}):"
+      pk=""
+      for m in $metas; do
+        deps=$(meta_deps "$m" | grep -v -E '^(kali|parrot)-')
+        # shellcheck disable=SC2086
+        n=$(installed_of $deps); t=$(echo "$deps" | grep -c .)
+        printf '  %-36s %3s/%-3s\n' "$m" "$n" "$t"; pk="$pk $deps"
+      done
+      # shellcheck disable=SC2086
+      cmds=$(dpkg-query -W -f='${Package} ${Status}\n' $pk 2>/dev/null | awk '/install ok installed/{print $1}' | xargs -r dpkg -L 2>/dev/null \
+             | grep -E '^/(usr/)?(s)?bin/[^/]+$' | sort -u | wc -l)
+      echo "  → $cmds tool commands from these packages"
+    done
+  fi
+  echo; echo "Tool folders outside the package manager (FoxWorx's agent: ✓ can use · ✗ can't see):"
+  for d in $TOOL_DIRS; do
+    [ -d "$d" ] || continue
+    c=$(exec_count "$d"); [ "$c" -gt 0 ] || continue
+    if fw_sees "$d"; then printf '  %s✓%s %-24s %3s  %s\n' "$G" "$N" "$d" "$c" "$(exec_names "$d" 8)"
+    else printf '  %s✗%s %-24s %3s  %s\n' "$Y" "$N" "$d" "$c" "$(exec_names "$d" 8)"; fi
+  done
+  echo; echo "Tool projects (no single command; run them from their folder or link one into ~/.local/bin):"
+  for d in /opt/* "$HOME"/tools/* "$HOME"/Tools/*; do
+    [ -d "$d" ] || continue
+    case "${d##*/}" in google|microsoft|containerd|foxos|resolve|brave.com|zoom|teamviewer) continue ;; esac
+    projects=$((projects+1))
+    entry=$(for f in "$d"/* "$d"/bin/*; do [ -f "$f" ] && { [ -x "$f" ] || head -c2 "$f" 2>/dev/null | grep -q '#!'; } && echo "${f#$d/}"; done 2>/dev/null | head -3 | tr '\n' ' ')
+    printf '  • %-28s %s\n' "$d" "${entry:-(no launcher found)}"
+  done
+  [ $projects = 0 ] && echo "  (none)"
+  local hidden=""; for d in $TOOL_DIRS; do [ -d "$d" ] && [ "$(exec_count "$d")" -gt 0 ] && ! fw_sees "$d" && hidden="$hidden $d"; done
+  echo
+  if [ -n "$hidden" ]; then say "FoxWorx's agent can't see:$hidden — fix with: foxos-tools expose"
+  else say "FoxWorx's agent can see every tool folder above."; fi
+}
+
+# Add every tool folder that has commands to FoxWorx's search path, so the agent can use them.
+cmd_expose() {
+  local d cur new added=""
+  [ -f "$SE" ] || { say "FoxWorx isn't configured on this machine ($SE missing)"; return 1; }
+  cur=$(fw_extra); new=$cur
+  for d in $TOOL_DIRS; do
+    [ -d "$d" ] && [ "$(exec_count "$d")" -gt 0 ] || continue
+    fw_sees "$d" && continue
+    new="${new:+$new:}$d"; added="$added $d"
+  done
+  if [ -z "$added" ]; then say "FoxWorx already sees every tool folder"; return 0; fi
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] FOXWORX_EXTRA_TOOL_PATHS="%s"\n' "$new"; return 0; fi
+  [ -f "$SE.before-foxos-expose" ] || cp -p "$SE" "$SE.before-foxos-expose"
+  if grep -q '^FOXWORX_EXTRA_TOOL_PATHS=' "$SE"; then sed -i "s#^FOXWORX_EXTRA_TOOL_PATHS=.*#FOXWORX_EXTRA_TOOL_PATHS=\"$new\"#" "$SE"
+  else printf 'FOXWORX_EXTRA_TOOL_PATHS="%s"\n' "$new" >> "$SE"; fi
+  say "FoxWorx can now use tools in:$added"
+  systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true
+  say "(restart FoxWorx if it's running outside systemd; previous settings saved as ${SE##*/}.before-foxos-expose)"
+}
+
 confirm() { [ "$YES" = 1 ] && return 0; [ -t 0 ] || return 1; local a; read -rp "  $1 [y/N] " a; [[ "$a" =~ ^[Yy] ]]; }
 
 # Tests source this file with FOXOS_TOOLS_NO_MAIN=1 to call the functions directly.
@@ -392,8 +533,10 @@ case "${1:-check}" in
   check) shift || true; cmd_check "$@" ;;
   install) shift; cmd_install "$@" ;;
   toolkit|kali) shift; cmd_toolkit "$@" ;;
+  inventory) shift; cmd_inventory "$@" ;;
+  expose) shift; cmd_expose "$@" ;;
   update) shift; cmd_update "$@" ;;
   timer) shift; cmd_timer "$@" ;;
-  -h|--help|help) sed -n 2,22p "$0" ;;
-  *) echo "usage: foxos-tools check | install [--core|--all] | toolkit [--set headless|default|large] | update | timer [--off]"; exit 1 ;;
+  -h|--help|help) sed -n 2,28p "$0" ;;
+  *) echo "usage: foxos-tools check | inventory | expose | install [--core|--all] | toolkit [--set …] | update | timer [--off]"; exit 1 ;;
 esac
