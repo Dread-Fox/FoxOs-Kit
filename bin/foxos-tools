@@ -120,9 +120,14 @@ pd_install() (   # pd_install REPO TARGET_NAME  (subshell: its temp dir is alway
   repo=$1 target=$2
   have unzip || pkg_ensure unzip
   tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-  api=$(curl -fsSL --max-time 30 "https://api.github.com/repos/projectdiscovery/$repo/releases/latest") || { echo "    GitHub API unreachable"; exit 1; }
-  ver=$(printf '%s' "$api" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"v\{0,1\}\([^"]*\)"$/\1/')  # no python needed
-  [ -n "$ver" ] || exit 1
+  # Latest version from the releases/latest redirect (not rate-limited like the API); the API is the fallback.
+  ver=$(curl -fsSI --max-time 30 "https://github.com/projectdiscovery/$repo/releases/latest" 2>/dev/null \
+        | tr -d '\r' | sed -n 's#^[Ll]ocation: .*/releases/tag/v\{0,1\}\([^/]*\)$#\1#p' | tail -1)
+  if [ -z "$ver" ]; then
+    api=$(curl -fsSL --max-time 30 "https://api.github.com/repos/projectdiscovery/$repo/releases/latest") || { echo "    GitHub unreachable"; exit 1; }
+    ver=$(printf '%s' "$api" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"v\{0,1\}\([^"]*\)"$/\1/')
+  fi
+  case "$ver" in ''|*[!0-9A-Za-z.+-]*) echo "    could not determine the latest $repo version"; exit 1 ;; esac
   asset="${repo}_${ver}_linux_${FOXOS_ARCH}.zip"; sums="${repo}_${ver}_checksums.txt"
   if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] download %s (verify against %s) → %s/%s\n' "$asset" "$sums" "$BIN" "$target"; exit 0; fi
   curl -fsSL --max-time 300 -o "$tmp/$asset" "https://github.com/projectdiscovery/$repo/releases/download/v$ver/$asset" || exit 1

@@ -17,6 +17,7 @@ elif command -v apk >/dev/null; then apk add -q sudo bash curl shadow su-exec ut
 elif command -v xbps-install >/dev/null; then xbps-install -Sy sudo bash curl >/dev/null
 fi
 id fox >/dev/null 2>&1 || useradd -m -s /bin/bash fox
+pwconv 2>/dev/null || true   # some images (Docker Fedora) leave no shadow entry, which breaks sudo
 echo "fox ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/fox; chmod 440 /etc/sudoers.d/fox
 cp -r /kit /home/fox/foxos-kit; chown -R fox /home/fox/foxos-kit
 su - fox -c "cd ~/foxos-kit && FOXOS_NO_CLAUDE=1 ./install.sh --no-rice --no-timers --no-rc --toolkit none < /dev/null" ; echo "INSTALL_EXIT=$?"
