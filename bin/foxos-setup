@@ -53,8 +53,8 @@ checklist() {
   if command -v foxos-tools >/dev/null; then
     t=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -o 'missing: .*')
     case "$t" in "missing: 0 core, 0 extra") ok "DreadFox tools: all present" ;; *) warn "DreadFox tools $t (foxos-tools check)" ;; esac
-    tk=$(sed -n 's/^TOOLKIT=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
-    [ -n "$tk" ] && ok "standard toolset: $tk" || warn "no standard toolset (foxos-tools toolkit)"
+    tk=$(sed -n 's/^TOOLKIT_LABEL=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
+    [ -n "$tk" ] && ok "security toolset: $tk" || warn "no security toolset recorded (foxos-tools toolkit)"
   fi
   [ -n "$(lms_bin)" ] && ok "LM Studio installed" || warn "LM Studio not installed"
   main_model && ok "Zenko main model downloaded" || warn "Zenko main model not downloaded"
@@ -88,13 +88,19 @@ fi
 # ------------------------------------------------------------------ 2. security tools
 step "2/7  Security tools"
 if command -v foxos-tools >/dev/null; then
-  tk=$(sed -n 's/^TOOLKIT=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
-  if [ -n "$tk" ]; then ok "standard toolset: $tk (updated weekly; new Kali tools are added automatically)"
+  tk=$(sed -n 's/^TOOLKIT_LABEL=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
+  if [ -n "$tk" ]; then ok "security toolset: $tk (checked weekly for updates)"
   else
-    say "No standard security toolset yet. Recommended: kali-linux-headless, Kali's full command-line toolset"
-    say "(~12 GB; on non-Kali systems it runs in an official Kali container). Bigger: default (~25 GB), large (~35 GB)."
-    if ask "Install the standard toolset (headless) now?" Y; then foxos-tools toolkit --set headless --yes && foxos-tools timer >/dev/null
-    elif ask "Install the larger 'default' toolset instead?" N; then foxos-tools toolkit --set default --yes && foxos-tools timer >/dev/null; fi
+    found=$(FOXOS_TOOLS_NO_MAIN=1 bash -c '. "$(command -v foxos-tools)"; toolset_scan' 2>/dev/null | cut -d'|' -f2)
+    if [ -n "$found" ]; then
+      ok "security toolset(s) found: $(printf '%s' "$found" | paste -sd ';' - | sed 's/;/; /g')"
+      foxos-tools toolkit --yes >/dev/null && foxos-tools timer >/dev/null
+    else
+      say "No security toolset yet. Recommended: kali-linux-headless, Kali's full command-line toolset"
+      say "(~12 GB; on non-Kali systems it runs in an official Kali container). Bigger: default (~25 GB), large (~35 GB)."
+      if ask "Install the standard toolset (headless) now?" Y; then foxos-tools toolkit --set headless --yes && foxos-tools timer >/dev/null
+      elif ask "Install the larger 'default' toolset instead?" N; then foxos-tools toolkit --set default --yes && foxos-tools timer >/dev/null; fi
+    fi
   fi
   missing=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*missing: \([0-9]*\) core.*/\1/p')
   if [ "${missing:-0}" != 0 ] && ask "Fill $missing missing core DreadFox tool(s) individually?" Y; then foxos-tools install --core --yes; fi

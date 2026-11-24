@@ -6,7 +6,9 @@
 #        fill gaps: distro packages first, then official ProjectDiscovery release binaries
 #        (SHA-256 checked against the release checksums), then isolated pipx installs.
 #   foxos-tools toolkit [--set headless|default|large|everything] [--yes]
-#        the STANDARD toolset (default: kali-linux-headless, Kali's full command-line toolset). On Kali:
+#        make sure a security toolset is present. Without --set it recognises Kali, Parrot, BackBox, BlackArch,
+#        Fedora Security Lab, Pentoo, REMnux, Exegol and hand-built collections (60%+ of ~70 common tools) and
+#        installs nothing if one is found. Otherwise (or with --set) Kali's standard set (headless). On Kali:
 #        Kali's metapackage via apt. Anywhere else: an official Kali container (distrobox + podman);
 #        every tool it adds that the host lacks becomes a command in ~/.local/bin. Host packages untouched.
 #   foxos-tools update [--auto]
@@ -90,7 +92,9 @@ cmd_check() {
   say "missing: $miss_core core, $miss_extra extra"
   [ $miss_core -gt 0 ] && say "fill core gaps:  foxos-tools install --core"
   [ $miss_extra -gt 0 ] && say "everything:      foxos-tools install --all   and the standard toolset: foxos-tools toolkit"
-  local tk; tk=$(state_get TOOLKIT); say "standard toolkit: ${tk:-not installed (foxos-tools toolkit)}"
+  local found; found=$(toolset_scan)
+  if [ -n "$found" ]; then say "security toolsets detected:"; printf '%s\n' "$found" | while IFS='|' read -r id label upd; do printf '    • %s\n' "$label"; done
+  else say "no security toolset detected — install the standard one: foxos-tools toolkit"; fi
   return 0
 }
 
@@ -174,30 +178,99 @@ state_set() { [ "${FOXOS_DRYRUN:-0}" = 1 ] && return 0; mkdir -p "$(dirname "$ST
 free_gb() { local g; g=$(df -BG --output=avail "${1:-$HOME}" 2>/dev/null | tail -1 | tr -dc 0-9); echo "${g:-999}"; }  # unknown -> don't block
 
 # Which standard toolkit is present? Prints the largest installed Kali metapackage (host or container).
-toolkit_present() {
+# Largest Kali metapackage installed on the host (Kali) or in our container ('' if none).
+kali_meta_installed() {
   local m best="" r=0
-  if [ "$FOXOS_KALI" = 1 ]; then
+  if command -v dpkg-query >/dev/null; then
     for m in $META_RANK; do m=${m%%:*}
       dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best=$m; r=$(rank "$m"); }
     done
-  elif have distrobox && distrobox list 2>/dev/null | grep -qw "$BOX"; then
+  fi
+  if [ -z "$best" ] && have distrobox && distrobox list 2>/dev/null | grep -qw "$BOX"; then
     for m in $META_RANK; do m=${m%%:*}
-      distrobox enter "$BOX" -- dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best=$m; r=$(rank "$m"); }
+      distrobox enter "$BOX" -- dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best="container:$m"; r=$(rank "$m"); }
     done
   fi
   echo "$best"
 }
 
+# A broad reference list of widely used security tools, across recon, web, passwords, AD, exploitation,
+# sniffing, wireless, forensics and reversing. Used to recognise hand-built collections.
+REF_TOOLS='nmap masscan rustscan amass subfinder assetfinder dnsx dnsrecon dnsenum fierce theHarvester recon-ng
+spiderfoot whatweb wafw00f httpx-toolkit nuclei nikto wpscan sqlmap commix ffuf gobuster feroxbuster dirb dirsearch
+wfuzz burpsuite zaproxy hydra medusa ncrack john hashcat hashid cewl crunch netexec impacket-secretsdump evil-winrm
+responder enum4linux smbclient smbmap ldapsearch bloodhound-python kerbrute msfconsole msfvenom searchsploit tcpdump
+tshark wireshark ettercap bettercap aircrack-ng reaver bully wifite kismet hcxdumptool binwalk exiftool foremost
+radare2 ghidra gdb yara sslscan testssl sslyze socat nc proxychains4'
+COVERAGE_MIN=${FOXOS_COVERAGE_MIN:-60}
+
+coverage() { local n=0 t=0 x; for x in $REF_TOOLS; do t=$((t+1)); have "$x" && n=$((n+1)); done; echo "$n $t"; }
+dpkg_any() { dpkg-query -W -f='${Package} ${Status}\n' "$@" 2>/dev/null | awk '/install ok installed/{print $1}'; }
+
+# Every security toolset detected on this machine, one per line:  id|label|update
+#   update = apt:PKG | pacman | dnf-group:GROUP | container | remind:TEXT
+toolset_scan() {
+  local m n p imgs rt
+  m=$(kali_meta_installed)
+  case "$m" in
+    container:*) echo "kali-container|Kali ${m#container:} (container $BOX)|container" ;;
+    ?*) echo "kali|Kali $m|apt:$m" ;;
+  esac
+  if command -v dpkg-query >/dev/null; then
+    p=$(dpkg_any 'parrot-tools*' | sort | head -1); [ -n "$(dpkg_any parrot-tools-full)" ] && p=parrot-tools-full
+    [ -n "$p" ] && echo "parrot|Parrot Security ($p)|apt:$p"
+    n=$(dpkg_any 'backbox-*' | wc -l); [ "$n" -gt 0 ] && echo "backbox|BackBox ($n backbox packages)|remind:sudo apt update && sudo apt full-upgrade"
+  fi
+  if command -v pacman >/dev/null && pacman -Sl blackarch >/dev/null 2>&1; then
+    n=$(pacman -Qg blackarch 2>/dev/null | wc -l)
+    [ "$n" -ge 20 ] && echo "blackarch|BlackArch ($n tools installed)|pacman"
+  fi
+  if command -v dnf >/dev/null && dnf -q group list --installed 2>/dev/null | grep -qi 'security lab'; then
+    echo "fedora-security-lab|Fedora Security Lab|dnf-group:security-lab"
+  fi
+  [ -d /var/db/pkg/pentoo ] && echo "pentoo|Pentoo|remind:sudo emerge --sync && sudo emerge -uDN @world"
+  { [ -f /etc/remnux-version ] || have remnux; } && echo "remnux|REMnux (malware analysis)|remind:sudo remnux upgrade"
+  have exegol && echo "exegol|Exegol (container toolkit)|remind:exegol update"
+  for rt in podman docker; do
+    have "$rt" || continue
+    imgs=$($rt images --format '{{.Repository}}' 2>/dev/null | grep -E 'nwodtuhs/exegol|parrotsec/security|blackarchlinux/blackarch' | sort -u | head -3 | tr '\n' ' ')
+    [ -n "$imgs" ] && echo "container-$rt|container images via $rt: ${imgs% }|remind:update those images with $rt pull"
+  done
+  read -r n t <<< "$(coverage)"
+  [ $((100 * n / t)) -ge "$COVERAGE_MIN" ] && echo "collection|existing tool collection ($n/$t common tools)|remind:foxos-tools install --all (or adopt Kali's self-updating set: foxos-tools toolkit --set headless)"
+  return 0
+}
+
 cmd_toolkit() {
-  local set=headless a prev="" meta have_meta
-  for a in "$@"; do case "$a" in --yes|-y) YES=1 ;; --set=*) set=${a#--set=} ;; headless|default|large|everything|missing) set=$a ;; esac
+  local set="" a prev="" meta found best
+  for a in "$@"; do case "$a" in --yes|-y) YES=1 ;; --set=*) set=${a#--set=} ;; headless|default|large|everything) set=$a ;; esac
     [ "$prev" = --set ] && set=$a; prev=$a; done
-  if [ "$set" = missing ]; then set=headless; fi
+  if [ -z "$set" ]; then
+    # automatic: any recognised toolset counts; only install Kali's if nothing is there
+    found=$(toolset_scan)
+    if [ -n "$found" ]; then
+      say "security toolset(s) already on this machine:"
+      printf '%s\n' "$found" | while IFS='|' read -r id label upd; do printf '    • %s\n' "$label"; done
+      best=$(printf '%s\n' "$found" | head -1)
+      state_set TOOLKIT "${best%%|*}"; state_set TOOLKIT_LABEL "$(printf '%s' "$best" | cut -d'|' -f2)"
+      state_set TOOLKIT_UPDATE "${best##*|}"
+      [ "${best%%|*}" = kali-container ] && kali_export
+      say "nothing to install. (Want Kali's self-updating set anyway? foxos-tools toolkit --set headless)"
+      return 0
+    fi
+    set=headless
+    say "no security toolset detected (Kali, Parrot, BackBox, BlackArch, Fedora Security Lab, Pentoo, REMnux,"
+    say "Exegol, or $COVERAGE_MIN%+ of $(set -- $REF_TOOLS; echo $#) common tools) — installing Kali's standard set"
+  fi
   meta="kali-linux-$set"
   [ "$(rank "$meta")" -gt 0 ] || { say "unknown toolkit '$set' (headless | default | large | everything)"; return 1; }
-  have_meta=$(toolkit_present)
-  if [ -n "$have_meta" ] && [ "$(rank "$have_meta")" -ge "$(rank "$meta")" ]; then
-    say "standard toolkit present: $have_meta"; state_set TOOLKIT "$have_meta"; [ "$FOXOS_KALI" = 1 ] || kali_export; return 0
+  found=$(kali_meta_installed)
+  if [ -n "$found" ] && [ "$(rank "${found#container:}")" -ge "$(rank "$meta")" ]; then
+    say "Kali ${found#container:} already present (covers $meta)"
+    case "$found" in container:*) state_set TOOLKIT kali-container; state_set TOOLKIT_UPDATE container; kali_export ;;
+                     *) state_set TOOLKIT kali; state_set TOOLKIT_UPDATE "apt:${found}" ;; esac
+    state_set TOOLKIT_LABEL "Kali ${found#container:}"
+    return 0
   fi
   local need; need=$(toolkit_size "$meta")
   if [ "${FOXOS_DRYRUN:-0}" != 1 ] && [ "$(free_gb)" -lt "$need" ]; then
@@ -229,7 +302,9 @@ cmd_toolkit() {
     run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$meta" || return 1
     kali_export
   fi
-  state_set TOOLKIT "$meta"
+  if [ "$FOXOS_KALI" = 1 ]; then state_set TOOLKIT kali; state_set TOOLKIT_UPDATE "apt:$meta"
+  else state_set TOOLKIT kali-container; state_set TOOLKIT_UPDATE container; fi
+  state_set TOOLKIT_LABEL "Kali $meta"
   say "standard toolkit ready: $meta. FoxWorx's agent discovers new tools automatically."
 }
 
@@ -264,25 +339,34 @@ kali_export() {
 
 # Pull in tools Kali added since last time (and updates), then expose any new ones.
 cmd_update() {
-  local auto=0 a meta; for a in "$@"; do [ "$a" = --auto ] && auto=1; [ "$a" = --yes ] && YES=1; done
-  meta=$(state_get TOOLKIT); meta=${meta:-$(toolkit_present)}
-  if [ -z "$meta" ]; then say "no standard toolkit yet — run: foxos-tools toolkit"; return 0; fi
-  if [ "$FOXOS_KALI" = 1 ]; then
-    if [ $auto = 1 ] && ! sudo -n true 2>/dev/null; then
-      command -v notify-send >/dev/null && notify-send -i security-high "FoxOS tools" "Weekly check: run 'foxos-tools update' to add new Kali tools." 2>/dev/null
-      say "needs your sudo password — run: foxos-tools update"; return 0
-    fi
-    say "refreshing $meta (adds tools Kali has added since your last update)"
-    pm_update; pm_install "$meta"
-    say "for newer versions of the tools themselves run: sudo apt full-upgrade"
-  else
-    have distrobox || { say "distrobox missing — run: foxos-tools toolkit"; return 1; }
-    say "updating the Kali toolkit container ($meta)…"
-    run distrobox enter "$BOX" -- sudo apt-get update -qq
-    run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y -qq
-    run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$meta"
-    kali_export
-  fi
+  local auto=0 a upd label
+  for a in "$@"; do [ "$a" = --auto ] && auto=1; [ "$a" = --yes ] && YES=1; done
+  upd=$(state_get TOOLKIT_UPDATE); label=$(state_get TOOLKIT_LABEL)
+  if [ -z "$upd" ]; then say "no toolset recorded yet — run: foxos-tools toolkit"; return 0; fi
+  needs_sudo() { if [ $auto = 1 ] && ! sudo -n true 2>/dev/null; then
+      command -v notify-send >/dev/null && notify-send -i security-high "FoxOS tools" "Weekly check: run 'foxos-tools update' to refresh $label." 2>/dev/null
+      say "needs your sudo password — run: foxos-tools update"; return 0; fi; return 1; }
+  case "$upd" in
+    apt:*) needs_sudo && return 0
+           say "refreshing $label (adds tools added to ${upd#apt:} since your last update)"
+           pm_update; pm_install "${upd#apt:}"
+           say "for newer versions of the tools themselves run: sudo apt full-upgrade" ;;
+    pacman) needs_sudo && return 0; say "updating $label"; run sudo pacman -Syu --noconfirm ;;
+    dnf-group:*) needs_sudo && return 0; say "updating $label"; run sudo dnf group upgrade -y "${upd#dnf-group:}" ;;
+    container)
+      have distrobox || { say "distrobox missing — run: foxos-tools toolkit"; return 1; }
+      local meta; meta=$(distrobox enter "$BOX" -- sh -c "dpkg-query -W -f='\${Package}\n' 'kali-linux-*' 2>/dev/null" | grep -E 'headless|default|large|everything' | head -1)
+      say "updating the Kali toolkit container (${meta:-kali-linux-headless})…"
+      run distrobox enter "$BOX" -- sudo apt-get update -qq
+      run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y -qq
+      run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${meta:-kali-linux-headless}"
+      kali_export ;;
+    remind:*)
+      if [ $auto = 1 ]; then
+        command -v notify-send >/dev/null && notify-send -i security-high "FoxOS tools" "Weekly check for $label: ${upd#remind:}" 2>/dev/null
+      fi
+      say "$label is updated with its own tooling: ${upd#remind:}" ;;
+  esac
   state_set LAST_UPDATE "$(date +%F)"
 }
 
