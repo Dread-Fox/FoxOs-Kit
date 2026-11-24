@@ -8,12 +8,14 @@ Install LM Studio **0.4.x** (0.4.28 tested) from https://lmstudio.ai — the App
 Older llama.cpp runtimes (LM Studio 0.3.x, Ollama 0.11) cannot load the `qwen35` / `qwen35moe` architectures
 these models use. Open it once so it installs the `lms` CLI at `~/.lmstudio/bin/lms`.
 
-## 2. Models (~45 GB)
+`foxos-setup` does steps 1–3 for you (LM Studio download, models, GPU settings, loading, FoxWorx hookup).
+
+## 2. Models (main ≈ 21 GB, all ≈ 49 GB)
 ```bash
-~/zenko-scripts/get_models.sh        # resumable curl download into ~/.lmstudio/models
-~/zenko-scripts/aria_models.sh       # faster alternative: 16 connections with aria2c, verifies sizes
-~/zenko-scripts/resume_models.sh     # finishes/validates any partial download
+~/zenko-scripts/fetch_models.sh main   # main agent model + embeddings; resumable, verified against Hugging Face sizes
+~/zenko-scripts/fetch_models.sh all    # + Qwen3.8-27B reasoning + gpt-oss-20b fallback
 ```
+(`get_models.sh`, `aria_models.sh`, `resume_models.sh` are the older single-purpose versions.)
 | model | role |
 |---|---|
 | Huihui-Qwen3.6-35B-A3B-abliterated Q4_K | main agent (MoE, ~45 tok/s on 3x RTX 3060 Ti) |
@@ -23,7 +25,7 @@ these models use. Open it once so it installs the `lms` CLI at `~/.lmstudio/bin/
 
 ## 3. Load and connect
 ```bash
-~/zenko-scripts/load_zenko.sh                         # ZENKO_GPU / ZENKO_CTX / ZENKO_MODEL to tune
+~/zenko-scripts/load_zenko.sh                         # settings in ~/.config/zenko/zenko.env (ZENKO_GPU / ZENKO_CTX / ZENKO_MODEL)
 python3 -I ~/zenko-scripts/talk.py /tmp/h.json "hi"   # quick chat test (keeps history in h.json)
 ```
 `--gpu max` at a 128K context runs out of memory when the desktop also uses GPU 0. These models think before

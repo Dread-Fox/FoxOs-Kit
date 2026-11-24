@@ -1,0 +1,176 @@
+#!/usr/bin/env bash
+# FoxOS guided setup — finishes everything install.sh can't do on its own, asking before each step.
+# Safe to re-run any time: finished steps are detected and skipped.
+#   foxos-setup            interactive
+#   foxos-setup --check    only print the status checklist
+set -uo pipefail
+export PATH="$HOME/.local/bin:$HOME/.lmstudio/bin:$PATH"
+FW="$HOME/FoxWorx-DreadFoxHacker"
+SE="$HOME/.config/foxworx-workbench/settings.env"
+CREDS="$HOME/.config/hackerone/creds"
+ZENV="$HOME/.config/zenko/zenko.env"
+LMS_APP="$HOME/Applications/LM-Studio.AppImage"
+API="$HOME/.local/bin/foxworx-api"
+
+C=$'\033[38;5;160m' G=$'\033[38;5;71m' Y=$'\033[38;5;178m' D=$'\033[2m' B=$'\033[1m' N=$'\033[0m'
+say()  { printf '%s[foxos]%s %s\n' "$C" "$N" "$*"; }
+step() { printf '\n%s━━ %s %s\n' "$C" "$*" "$N"; }
+ok()   { printf '  %s✓%s %s\n' "$G" "$N" "$*"; }
+warn() { printf '  %s!%s %s\n' "$Y" "$N" "$*"; }
+# ask "question" [Y|N] -> 0 for yes. Without a terminal, the default is "no" so nothing big starts unattended.
+ask() { local q=$1 def=${2:-Y} a; [ -t 0 ] || return 1
+  if [ "$def" = Y ]; then read -rp "  $q [Y/n] " a; [[ ! "$a" =~ ^[Nn] ]]
+  else read -rp "  $q [y/N] " a; [[ "$a" =~ ^[Yy] ]]; fi; }
+
+# ------------------------------------------------------------------ status probes
+lms_bin()     { command -v lms 2>/dev/null || { [ -x "$HOME/.lmstudio/bin/lms" ] && echo "$HOME/.lmstudio/bin/lms"; }; }
+lms_up()      { curl -s --max-time 3 http://127.0.0.1:1234/v1/models 2>/dev/null; }
+zenko_loaded(){ lms_up | grep -q '"zenko-main"'; }
+main_model()  { ls "$HOME/.lmstudio/models/huihui-ai/Huihui-Qwen3.6-35B-A3B-abliterated-MTP-GGUF/"*Q4_K.gguf >/dev/null 2>&1; }
+fw_status()   { "$API" status 2>/dev/null; }
+fw_field()    { fw_status | python3 -c "import json,sys; d=json.load(sys.stdin); print(eval(sys.argv[1]))" "$1" 2>/dev/null; }
+fw_start()    { fw_status >/dev/null && return 0
+  systemctl --user start foxworx-workbench.service 2>/dev/null || return 1
+  for _ in $(seq 1 30); do fw_status >/dev/null && return 0; sleep 1; done; return 1; }
+vram_gb()     { command -v nvidia-smi >/dev/null || { echo 0; return; }
+  nvidia-smi --query-gpu=memory.total --format=csv,noheader,nounits 2>/dev/null | awk '{s+=$1} END{printf "%d", s/1024}'; }
+
+checklist() {
+  step "Status"
+  [ -x "$FW/.venv/bin/python" ] && ok "FoxWorx installed ($FW)" || warn "FoxWorx not installed — re-run ~/foxos-kit/install.sh"
+  if fw_status >/dev/null; then
+    [ "$(fw_field "d['mode']")" = open ] && ok "FoxWorx running, no login (local only): http://127.0.0.1:8765" \
+                                         || warn "FoxWorx running but asks for a login"
+    [ "$(fw_field "d['ai']['model']")" = zenko-main ] && ok "FoxWorx AI → LM Studio / zenko-main" || warn "FoxWorx AI model not set to zenko-main"
+    [ "$(fw_field "d['pet_hatched']")" = True ] && ok "DreadFox hatched ($(fw_field "d['pet_name']"))" || warn "DreadFox not hatched yet"
+  else warn "FoxWorx not running — start it from the FoxWorx desktop icon"; fi
+  [ -n "$(lms_bin)" ] && ok "LM Studio installed" || warn "LM Studio not installed"
+  main_model && ok "Zenko main model downloaded" || warn "Zenko main model not downloaded"
+  zenko_loaded && ok "zenko-main loaded in LM Studio" || warn "zenko-main not loaded (run ~/zenko-scripts/load_zenko.sh)"
+  [ -s "$CREDS" ] && ok "HackerOne credentials set" || warn "HackerOne credentials missing ($CREDS)"
+  systemctl --user is-enabled --quiet h1-sync.timer 2>/dev/null && ok "HackerOne sync timer on" || warn "HackerOne sync timer off"
+  [ -f "$HOME/.claude/.credentials.json" ] && ok "Claude Code logged in" || warn "Claude Code not logged in (run: claude)"
+  systemctl --user is-active --quiet claude-rc.service 2>/dev/null && ok "Claude Remote Control running" || warn "Claude Remote Control not running"
+}
+[ "${1:-}" = --check ] && { checklist; exit 0; }
+[ "$(id -u)" -eq 0 ] && { echo "run as your normal user, not root"; exit 1; }
+
+printf '\n%s%s  FoxOS guided setup%s\n' "$B" "$C" "$N"
+printf '%s  Each step asks first. Re-run any time with: foxos-setup   (status only: foxos-setup --check)%s\n' "$D" "$N"
+
+# ------------------------------------------------------------------ 1. FoxWorx: running, no login wall
+step "1/6  FoxWorx workbench"
+if [ ! -x "$FW/.venv/bin/python" ]; then warn "FoxWorx isn't installed — re-run ~/foxos-kit/install.sh first"
+else
+  if [ -f "$SE" ] && ! grep -q '^FOXWORX_AUTH_MODE="\{0,1\}open' "$SE"; then
+    say "FoxWorx currently asks for a login. It only listens on this machine (127.0.0.1)."
+    if ask "Turn the login off (no-login local mode; tunnels/proxies stay refused)?" Y; then
+      (cd "$FW" && bash scripts/configure.sh --insecure-open-mode) | sed 's/^/  /'
+      systemctl --user restart foxworx-workbench.service 2>/dev/null
+    fi
+  fi
+  if fw_start; then ok "FoxWorx is running: http://127.0.0.1:8765"
+  else warn "FoxWorx didn't start. Details: journalctl --user -u foxworx-workbench -n 30"; fi
+fi
+
+# ------------------------------------------------------------------ 2. LM Studio
+step "2/6  LM Studio (runs the local abliterated models)"
+if [ -n "$(lms_bin)" ]; then ok "LM Studio already installed"
+elif ask "Download and install LM Studio (~1 GB)?" Y; then
+  mkdir -p "$(dirname "$LMS_APP")"
+  say "downloading LM Studio…"
+  if curl -fL --retry 3 --progress-bar -o "$LMS_APP.part" https://lmstudio.ai/download/latest/linux/x64; then
+    mv "$LMS_APP.part" "$LMS_APP" && chmod +x "$LMS_APP"
+    mkdir -p "$HOME/.local/share/applications"
+    cat > "$HOME/.local/share/applications/lm-studio.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=LM Studio
+Comment=Local LLM server for Zenko
+Exec=$LMS_APP
+Terminal=false
+Categories=Development;
+EOF
+    ok "installed $LMS_APP (also in the app menu)"
+    if [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+      say "Opening LM Studio once so it sets up its command-line tool. You can skip its welcome screens."
+      setsid "$LMS_APP" >/dev/null 2>&1 < /dev/null &
+      for _ in $(seq 1 120); do [ -n "$(lms_bin)" ] && break; sleep 2; done
+      [ -n "$(lms_bin)" ] && ok "LM Studio is ready" || warn "LM Studio hasn't finished first-run yet — finish it, then re-run foxos-setup"
+    else warn "No desktop session here — open LM Studio from the app menu once, then re-run foxos-setup"; fi
+  else rm -f "$LMS_APP.part"; warn "download failed — try again later with foxos-setup"; fi
+else warn "skipped — Zenko and the FoxWorx AI need LM Studio (or another provider you set in FoxWorx)"; fi
+
+# ------------------------------------------------------------------ 3. models + GPU tuning
+step "3/6  Zenko models"
+if main_model; then ok "main model already downloaded"
+  ask "Also download the extra reasoning + fallback models (~28 GB more)?" N && ~/zenko-scripts/fetch_models.sh all
+elif [ -n "$(lms_bin)" ]; then
+  free=$(df -BG --output=avail "$HOME" | tail -1 | tr -dc 0-9)
+  say "Free disk in your home: ${free} GB.  Main set ≈ 21 GB · everything ≈ 49 GB."
+  if ask "Download the main model + embeddings now (~21 GB)?" Y; then
+    if ask "Also the extra reasoning + fallback models (~28 GB more)?" N; then ~/zenko-scripts/fetch_models.sh all
+    else ~/zenko-scripts/fetch_models.sh main; fi
+  else warn "skipped — later: ~/zenko-scripts/fetch_models.sh"; fi
+else warn "needs LM Studio first (step 2)"; fi
+
+V=$(vram_gb)
+if [ ! -f "$ZENV" ]; then
+  # Offload fraction from total VRAM (leaves ~2.5 GB for the desktop); proven at 0.65 on 3x 8 GB.
+  GPU=$(awk -v v="$V" 'BEGIN{f=(v-2.5)/31; if(f<0)f=0; if(f>1)f=1; printf "%.2f", int(f*20)/20}')
+  CTX=$(( V >= 20 ? 131072 : (V >= 12 ? 65536 : 32768) ))
+  mkdir -p "$(dirname "$ZENV")"
+  printf '# written by foxos-setup from %s GB total VRAM; edit to tune\nZENKO_GPU=%s\nZENKO_CTX=%s\n' "$V" "$GPU" "$CTX" > "$ZENV"
+  ok "GPU settings for ${V} GB VRAM: offload $GPU, context $CTX  ($ZENV)"
+  [ "$V" -eq 0 ] && warn "no NVIDIA GPU found — the model will run on CPU (slow; needs ~24 GB RAM)"
+else ok "GPU settings: $(grep -v '^#' "$ZENV" | tr '\n' ' ')"; fi
+
+# ------------------------------------------------------------------ 4. load model + connect FoxWorx
+step "4/6  Load Zenko and connect FoxWorx to it"
+if zenko_loaded; then ok "zenko-main already loaded"
+elif main_model && [ -n "$(lms_bin)" ] && ask "Load zenko-main now (about a minute)?" Y; then
+  ~/zenko-scripts/load_zenko.sh 2>&1 | tail -3 | sed 's/^/  /'
+  zenko_loaded && ok "zenko-main loaded" || warn "load failed — lower ZENKO_GPU / ZENKO_CTX in $ZENV and run ~/zenko-scripts/load_zenko.sh"
+fi
+if fw_status >/dev/null; then
+  if [ "$(fw_field "d['ai']['model']")" = zenko-main ]; then ok "FoxWorx already uses LM Studio / zenko-main"
+  elif ask "Point FoxWorx's AI (copilot, Rabbit Hole, pet chat) at LM Studio / zenko-main?" Y; then
+    "$API" select lmstudio zenko-main lmstudio-local | sed 's/^/  /'; fi
+elif [ $? -eq 3 ]; then warn "FoxWorx asks for a login, so set the model in its web page: Provider & model → LM Studio → zenko-main"; fi
+
+# ------------------------------------------------------------------ 5. DreadFox
+step "5/6  Your DreadFox companion"
+if fw_status >/dev/null; then
+  if [ "$(fw_field "d['pet_hatched']")" = True ]; then ok "already hatched: $(fw_field "d['pet_name']")"
+  elif ask "Hatch your DreadFox now?" Y; then
+    name=""; [ -t 0 ] && read -rp "  Name it (Enter = DreadFox): " name
+    "$API" hatch "${name:-DreadFox}" | sed 's/^/  /'
+    say "It grows as you work in FoxWorx. Open it from the 'DreadFox Companion' desktop icon."
+  fi
+else warn "FoxWorx isn't reachable — hatch it later in the FoxWorx web page (DreadFox tab)"; fi
+
+# ------------------------------------------------------------------ 6. HackerOne + Claude
+step "6/6  HackerOne and Claude Code"
+if [ ! -s "$CREDS" ] && ask "Add your HackerOne API username and token now?" Y; then
+  read -rp "  HackerOne API username: " U
+  if [ -n "$U" ]; then read -rsp "  HackerOne API token (hidden): " T; echo
+    mkdir -p "$(dirname "$CREDS")"; (umask 077; printf 'H1_USER=%s\nH1_TOKEN=%s\n' "$U" "$T" > "$CREDS"); chmod 600 "$CREDS"
+    ok "saved $CREDS"; fi
+fi
+if [ -s "$CREDS" ] && ! systemctl --user is-enabled --quiet h1-sync.timer 2>/dev/null \
+   && ask "Turn on HackerOne sync (every 30 min) and daily light recon (04:13)?" Y; then
+  h1 timer --every 30 >/dev/null && h1 recon --timer -n 10 --at 04:13 >/dev/null && ok "timers on"
+  systemctl --user start --no-block h1-sync.service 2>/dev/null || true
+fi
+if [ ! -f "$HOME/.claude/.credentials.json" ] && command -v claude >/dev/null \
+   && ask "Log in to Claude Code now? (it opens; sign in, then type /exit)" Y; then
+  claude || true
+fi
+if [ -f "$HOME/.claude/.credentials.json" ] && [ -f "$HOME/.config/systemd/user/claude-rc.service" ] \
+   && ! systemctl --user is-active --quiet claude-rc.service 2>/dev/null \
+   && ask "Start Claude Remote Control (use this box from the Claude app)?" Y; then
+  systemctl --user enable --now claude-rc.service && ok "Remote Control running"
+fi
+
+checklist
+printf '\n%s  Desktop icons: FoxWorx · DreadFox Companion · Bounty Radar · LM Studio%s\n\n' "$D" "$N"

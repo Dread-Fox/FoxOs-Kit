@@ -6,6 +6,7 @@
 #   ./install.sh --no-timers     don't enable the H1 sync/recon timers
 #   ./install.sh --no-rc         don't install the Claude Remote Control service
 #   ./install.sh --no-foxworx    don't install the bundled FoxWorx workbench (the companion widget still installs)
+# Afterwards it offers the guided setup (foxos-setup): LM Studio, models, AI hookup, DreadFox, HackerOne, Claude.
 # Run as your normal user (not root) from a terminal inside the desktop session. Uses sudo when needed.
 # Safe to re-run: existing creds, memory and backups are never overwritten.
 set -euo pipefail
@@ -13,7 +14,7 @@ KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RICE=1 TIMERS=1 RC=1 FOXWORX=1
 for a in "$@"; do case "$a" in
   --no-rice) RICE=0 ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
-  -h|--help) sed -n 2,11p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
+  -h|--help) sed -n 2,12p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
 [ "$(id -u)" -eq 0 ] && { echo "run as your normal user, not root"; exit 1; }
 say() { printf '\033[38;5;160m[foxos]\033[0m %s\n' "$*"; }
 tmpl() { sed -e "s#@HOME@#$HOME#g" -e "s#@UID@#$(id -u)#g" "$1"; }
@@ -25,7 +26,7 @@ say "installing packages (apt)…"
 sudo apt-get update -qq
 PKGS="python3 python3-tk python3-yaml python3-pil git curl jq whois dnsutils libnotify-bin xdotool xdg-utils
       subfinder dnsx httpx-toolkit nuclei katana amass theharvester figlet imagemagick fonts-dejavu fonts-firacode
-      python3-venv ca-certificates aria2 zenity"
+      python3-venv ca-certificates aria2 zenity libfuse2t64 libfuse2"
 [ $RICE = 1 ] && PKGS="$PKGS plymouth plymouth-themes"
 avail=""; for p in $PKGS; do apt-cache show "$p" >/dev/null 2>&1 && avail="$avail $p" || say "  (not in apt: $p — skipped)"; done
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $avail
@@ -56,9 +57,9 @@ sudo ln -sf "$HOME/toolkit/refresh.py" /usr/local/bin/toolkit
 C="$HOME/.config/hackerone/creds"
 if [ ! -s "$C" ]; then
   mkdir -p "$(dirname "$C")"
-  read -rp "Your HackerOne API username (blank = skip for now): " U; U="${U:-}"
+  read -rp "Your HackerOne API username (blank = skip for now): " U || U=""
   if [ -n "$U" ]; then
-    read -rsp "HackerOne API token (hidden): " T; echo
+    read -rsp "HackerOne API token (hidden): " T || T=""; echo
     umask 077; printf 'H1_USER=%s\nH1_TOKEN=%s\n' "$U" "$T" > "$C"; chmod 600 "$C"
   else say "  skipped — add $C later (H1_USER=… / H1_TOKEN=…)"; fi
 fi
@@ -71,7 +72,7 @@ cp "$KIT/zenko/"* "$HOME/zenko-scripts/" && chmod +x "$HOME/zenko-scripts/"*.sh
 
 # FoxWorx launcher (starts the workbench if needed, then opens it)
 mkdir -p "$HOME/.local/bin"
-install -m 755 "$KIT/bin/foxworx-launch" "$HOME/.local/bin/foxworx-launch"
+for b in foxworx-launch foxworx-api foxos-setup; do install -m 755 "$KIT/bin/$b" "$HOME/.local/bin/$b"; done
 
 # desktop entries: Bounty Radar, DreadFox Companion, FoxWorx
 mkdir -p "$HOME/.local/share/applications" "$HOME/Desktop"
@@ -141,8 +142,17 @@ if [ $FOXWORX = 1 ]; then
     (cd "$FW" && sha256sum -c --quiet MANIFEST.sha256) || say "  warning: FoxWorx files don't match MANIFEST.sha256"
   else say "FoxWorx already at $FW — left as is (to update: cp -a $KIT/FoxWorx-DreadFoxHacker/. $FW/)"; fi
   if [ ! -x "$FW/.venv/bin/python" ]; then
-    say "installing FoxWorx (its installer prints a one-time setup token — save it)…"
-    (cd "$FW" && bash scripts/install.sh) || say "  FoxWorx install failed — rerun: cd $FW && bash scripts/install.sh"
+    LOGD="$HOME/.local/state/foxos"; mkdir -p "$LOGD"
+    say "installing FoxWorx (Python packages; a few minutes — log: $LOGD/foxworx-install.log)…"
+    if (cd "$FW" && bash scripts/install.sh --no-start) > "$LOGD/foxworx-install.log" 2>&1; then
+      # Local-only workbench: no login wall. Loopback listener only; tunnels/proxies stay refused.
+      (cd "$FW" && bash scripts/configure.sh --insecure-open-mode) >> "$LOGD/foxworx-install.log" 2>&1 \
+        && say "  FoxWorx set to no-login local mode (http://127.0.0.1:8765, this machine only)"
+      FW_NEW=1
+    else
+      say "  FoxWorx install failed — last lines:"; tail -n 15 "$LOGD/foxworx-install.log"
+      say "  fix the problem above, then rerun: cd $FW && bash scripts/install.sh"
+    fi
   fi
   # Rabbit Hole admin policy: installed CLI + all built-in workflows (only if none exists yet)
   if [ ! -f /etc/foxworx/adapter-policy.json ] && [ -f "$FW/policy/adapter-policy.v3.all-builtins.example.json" ]; then
@@ -157,11 +167,19 @@ if [ $FOXWORX = 1 ]; then
     systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true
     say "linked the DreadFox desktop companion to FoxWorx"
   fi
+  if [ "${FW_NEW:-0}" = 1 ]; then
+    systemctl --user restart foxworx-workbench.service 2>/dev/null && say "FoxWorx is running: http://127.0.0.1:8765" \
+      || say "  FoxWorx didn't start yet — foxos-setup will retry"
+  fi
 fi
 
 # ------------------------------------------------------------------ FoxOS look
 [ $RICE = 1 ] && bash "$KIT/foxos/apply-foxos.sh" "$KIT"
 
 say "toolkit catalog…"; toolkit >/dev/null 2>&1 || true
-say "done. Open a new terminal. Try:  h1 top · h1 recon --plan · h1 widget"
-say "desktop: Bounty Radar · DreadFox Companion · FoxWorx.  Local models: see ~/zenko-scripts/README.md"
+say "base install done. Desktop: FoxWorx · DreadFox Companion · Bounty Radar"
+if [ -t 0 ]; then
+  read -rp "Run the guided setup now (LM Studio, models, AI hookup, DreadFox, HackerOne, Claude)? [Y/n] " a || a=""
+  [[ "$a" =~ ^[Nn] ]] || exec "$HOME/.local/bin/foxos-setup"
+fi
+say "finish setup any time with:  foxos-setup      (status: foxos-setup --check)"
