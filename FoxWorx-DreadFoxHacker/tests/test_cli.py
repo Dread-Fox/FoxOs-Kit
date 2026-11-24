@@ -28,7 +28,7 @@ def test_config_write_rejects_symlinks(tmp_path):
 def test_cli_version_no_secrets(capsys):
     cli=cli_module()
     assert cli.main(['version'])==0
-    assert capsys.readouterr().out.strip()=='3.7.0'
+    assert capsys.readouterr().out.strip()=='3.8.0'
 
 def test_vendor_hashes_are_complete():
     cli=cli_module()
