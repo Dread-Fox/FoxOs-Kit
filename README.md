@@ -39,17 +39,22 @@ Needs a 64-bit CPU, a desktop login with systemd and Python 3.11+. On anything t
 (system branding, login screen, boot splash, GRUB) is skipped unless you pass `--rice`.
 
 ### Security tools on any distro: `foxos-tools`
+By default the installer makes sure a **standard security toolset** is present: `kali-linux-headless`, Kali's
+full command-line toolset (~12 GB). On Kali it's installed with apt; on any other distro it lives in an official
+Kali container (distrobox + podman) and every tool it adds that your system lacks becomes a normal command in
+`~/.local/bin`. Your system's own packages are never replaced. A weekly update re-applies the toolset, so **new
+tools Kali adds show up automatically**, and FoxWorx's agent discovers them on its own.
 ```bash
-foxos-tools check                    # which DreadFox tools are present or missing
-foxos-tools install --all            # fill gaps: distro packages → verified ProjectDiscovery releases → pipx
-foxos-tools kali --set missing       # tools no distro packages: from an official Kali container
-foxos-tools kali --set headless      # Kali's standard headless toolset (on Kali: via apt)
+foxos-tools check                      # the DreadFox tools: present or missing
+foxos-tools toolkit [--set default]    # the standard toolset: headless (default), default, large, everything
+foxos-tools update                     # pull in new Kali tools now (the weekly timer does this for you)
+foxos-tools install --all              # individual tools: distro packages → verified releases → pipx
+foxos-tools timer --off                # stop the weekly update
 ```
-The installer runs `foxos-tools install --core` automatically (`--all-tools` for everything), and `foxos-setup`
-offers the rest. Release binaries are checked against the release's SHA-256 checksums before installing. On
-non-Kali systems the Kali container uses distrobox + podman, so the host's own packages stay untouched; its
-tools appear as normal commands in `/usr/local/bin`. Tools that need raw packet or Wi-Fi access may still need
-host privileges when they run from the container.
+Install flags: `--toolkit default|large|everything` for a bigger set, `--toolkit none` to skip it. On a Kali host
+the weekly job can't type your sudo password, so it reminds you to run `foxos-tools update` instead; in the
+container it updates unattended. Release binaries are checked against the release's SHA-256 checksums.
+Tools that need raw packet or Wi-Fi access may still need host privileges when they run from the container.
 
 ## What's inside
 | path | installs to | what |

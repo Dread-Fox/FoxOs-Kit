@@ -5,12 +5,16 @@
 #   foxos-tools install [--core|--all] [--yes]
 #        fill gaps: distro packages first, then official ProjectDiscovery release binaries
 #        (SHA-256 checked against the release checksums), then isolated pipx installs.
-#   foxos-tools kali [--set missing|headless|default] [--yes]
-#        the full Kali toolset. On Kali: Kali's metapackages via apt. Anywhere else: an official
-#        Kali container (distrobox + podman) whose tools are exposed as normal commands, without
-#        touching the host's packages. 'missing' = just the tools still missing here.
+#   foxos-tools toolkit [--set headless|default|large|everything] [--yes]
+#        the STANDARD toolset (default: kali-linux-headless, Kali's full command-line toolset). On Kali:
+#        Kali's metapackage via apt. Anywhere else: an official Kali container (distrobox + podman);
+#        every tool it adds that the host lacks becomes a command in ~/.local/bin. Host packages untouched.
+#   foxos-tools update [--auto]
+#        re-apply the toolkit to pull in tools Kali has added since, then expose new ones
+#   foxos-tools timer [--off]
+#        weekly unattended update (container: automatic; Kali host: reminder, since apt needs sudo)
 #
-# Tools land in /usr/local/bin (FoxWorx and the h1 timers search there). Run as your normal user;
+# Single tools land in /usr/local/bin; container tools in ~/.local/bin (both searched by FoxWorx and h1). Run as your normal user;
 # it asks for sudo when needed. FOXOS_DRYRUN=1 prints the plan without changing anything.
 set -uo pipefail
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -85,7 +89,8 @@ cmd_check() {
   echo
   say "missing: $miss_core core, $miss_extra extra"
   [ $miss_core -gt 0 ] && say "fill core gaps:  foxos-tools install --core"
-  [ $miss_extra -gt 0 ] && say "everything:      foxos-tools install --all   then   foxos-tools kali --set missing"
+  [ $miss_extra -gt 0 ] && say "everything:      foxos-tools install --all   and the standard toolset: foxos-tools toolkit"
+  local tk; tk=$(state_get TOOLKIT); say "standard toolkit: ${tk:-not installed (foxos-tools toolkit)}"
   return 0
 }
 
@@ -138,78 +143,160 @@ cmd_install() {
         pd:*) echo "→ ProjectDiscovery release"; pd_install "${m#pd:}" "$cmd" && { done_=1; break; } ;;
         pipx:*) echo "→ pipx"; pipx_install "${m#pipx:}" "$cmd" && { done_=1; break; } ;;
         kali:*) if [ "$FOXOS_KALI" = 1 ]; then echo "→ Kali package ${m#kali:}"; pm_install "${m#kali:}" && { done_=1; break; }
-                else kali_left+=("$cmd"); echo "→ needs the Kali container (foxos-tools kali)"; done_=2; fi ;;
+                else kali_left+=("$cmd"); echo "→ comes with the standard toolkit (foxos-tools toolkit)"; done_=2; fi ;;
       esac
     done
     [ $done_ = 0 ] && echo "    could not install $cmd here"
   done < <(rows)
   if [ ${#kali_left[@]} -gt 0 ]; then
     say "${#kali_left[@]} tool(s) aren't packaged for $FOXOS_NAME: ${kali_left[*]}"
-    say "get them from an official Kali container:  foxos-tools kali --set missing"
+    say "they come with the standard toolkit (Kali container):  foxos-tools toolkit"
   fi
   say "done. Check with: foxos-tools check"
 }
 
 # ------------------------------------------------------------------ kali
-kali_pkgs_for_missing() {
-  local cmd tier methods desc m out=()
-  while IFS='|' read -r cmd tier methods desc; do
-    have "$cmd" && continue
-    for m in $methods; do [[ $m == kali:* ]] && out+=("${m#kali:}"); done
-  done < <(rows)
-  printf '%s\n' "${out[@]}" | sort -u | tr '\n' ' '
-}
+# ------------------------------------------------------------------ standard toolkit
+# Kali's metapackages are the "standard set": Kali maintains them and adds new tools to them over time,
+# so re-applying one later pulls in tools that didn't exist when DreadFox was installed.
+STATE="$HOME/.local/share/foxos/toolkit.env"
+EXPORTS="${FOXOS_EXPORT_DIR:-$HOME/.local/bin}"
+MARK='# foxos-kali-export'
+META_RANK='kali-linux-headless:1 kali-linux-default:2 kali-linux-large:3 kali-linux-everything:4'
+# Never expose these from the container, even if the host lacks them (shells, interpreters, package and
+# system management); everything else the toolkit added is a tool.
+DENY='^(sudo|su|sh|bash|dash|zsh|fish|env|login|passwd|chsh|chfn|newgrp|apt.*|dpkg.*|debconf.*|python[0-9.]*|perl[0-9.]*|ruby[0-9.]*|node|npm|java|systemctl|journalctl|loginctl|mount|umount|ldconfig|update-.*|user(add|del|mod)|group(add|del|mod)|visudo|distrobox.*|podman|docker|flatpak|snap|pip[0-9.]*|pipx|gem|xdg-.*|dbus-.*|gpg.*|ssh|sshd|scp|sftp|ssh-.*|curl|wget|git|tar|gzip|gunzip|zip|unzip|less|more|vi|vim|nano|man|which|whereis|locale.*|tzselect|x-.*|py3.*|pydoc.*|2to3.*)$'
 
-cmd_kali() {
-  local set=missing a pkgs
-  for a in "$@"; do case "$a" in --set=*) set=${a#--set=} ;; missing|headless|default) set=$a ;; --yes|-y) YES=1 ;; esac; done
-  local prev=""; for a in "$@"; do [ "$prev" = --set ] && set=$a; prev=$a; done
-  case "$set" in
-    missing) pkgs=$(kali_pkgs_for_missing) ;;
-    headless) pkgs="kali-linux-headless" ;;
-    default) pkgs="kali-linux-default" ;;
-    *) say "unknown set '$set' (missing | headless | default)"; return 1 ;;
-  esac
-  if [ -z "${pkgs// /}" ]; then say "nothing missing — all DreadFox tools are present"; return 0; fi
-  local size="from a few hundred MB up to ~3 GB (Metasploit is the largest)"; [ "$set" = headless ] && size="about 4–6 GB"; [ "$set" = default ] && size="about 10–15 GB"
+toolkit_size() { case "$1" in kali-linux-headless) echo 12 ;; kali-linux-default) echo 25 ;; kali-linux-large) echo 35 ;; *) echo 60 ;; esac; }
+rank() { local m; for m in $META_RANK; do [ "${m%%:*}" = "$1" ] && { echo "${m##*:}"; return; }; done; echo 0; }
+state_get() { [ -f "$STATE" ] && sed -n "s/^$1=//p" "$STATE" | tail -1; }
+state_set() { [ "${FOXOS_DRYRUN:-0}" = 1 ] && return 0; mkdir -p "$(dirname "$STATE")"; { [ -f "$STATE" ] && grep -v "^$1=" "$STATE"; echo "$1=$2"; } > "$STATE.tmp"; mv "$STATE.tmp" "$STATE"; }
+free_gb() { local g; g=$(df -BG --output=avail "${1:-$HOME}" 2>/dev/null | tail -1 | tr -dc 0-9); echo "${g:-999}"; }  # unknown -> don't block
+
+# Which standard toolkit is present? Prints the largest installed Kali metapackage (host or container).
+toolkit_present() {
+  local m best="" r=0
   if [ "$FOXOS_KALI" = 1 ]; then
-    say "Kali detected: installing via apt ($size): $pkgs"
-    confirm "Install now?" || return 0
-    pm_update; # shellcheck disable=SC2086
-    pm_install $pkgs
-    return
+    for m in $META_RANK; do m=${m%%:*}
+      dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best=$m; r=$(rank "$m"); }
+    done
+  elif have distrobox && distrobox list 2>/dev/null | grep -qw "$BOX"; then
+    for m in $META_RANK; do m=${m%%:*}
+      distrobox enter "$BOX" -- dpkg-query -W -f='${Status}' "$m" 2>/dev/null | grep -q 'install ok installed' && [ "$(rank "$m")" -gt $r ] && { best=$m; r=$(rank "$m"); }
+    done
   fi
-  say "$FOXOS_NAME isn't Kali: the tools come from an official Kali container (kalilinux/kali-rolling)"
-  say "via distrobox + podman. Your system packages stay untouched. Download: $size."
-  say "Kali packages: $pkgs"
-  confirm "Set up the Kali container now?" || return 0
-  have podman || pkg_ensure podman
-  have distrobox || pkg_ensure distrobox
-  if [ "${FOXOS_DRYRUN:-0}" != 1 ] && ! { have podman && have distrobox; }; then
-    say "podman/distrobox aren't available from $FOXOS_NAME's repos — install them, then re-run (see https://distrobox.it)"; return 1
-  fi
-  if [ "${FOXOS_DRYRUN:-0}" = 1 ] || ! distrobox list 2>/dev/null | grep -qw "$BOX"; then
-    run distrobox create --yes --name "$BOX" --image docker.io/kalilinux/kali-rolling:latest
-  fi
-  run distrobox enter "$BOX" -- sudo apt-get update -qq
-  # shellcheck disable=SC2086
-  run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $pkgs
-  kali_export
+  echo "$best"
 }
 
-# Expose the container's copies of tools that are still missing on the host as /usr/local/bin commands.
+cmd_toolkit() {
+  local set=headless a prev="" meta have_meta
+  for a in "$@"; do case "$a" in --yes|-y) YES=1 ;; --set=*) set=${a#--set=} ;; headless|default|large|everything|missing) set=$a ;; esac
+    [ "$prev" = --set ] && set=$a; prev=$a; done
+  if [ "$set" = missing ]; then set=headless; fi
+  meta="kali-linux-$set"
+  [ "$(rank "$meta")" -gt 0 ] || { say "unknown toolkit '$set' (headless | default | large | everything)"; return 1; }
+  have_meta=$(toolkit_present)
+  if [ -n "$have_meta" ] && [ "$(rank "$have_meta")" -ge "$(rank "$meta")" ]; then
+    say "standard toolkit present: $have_meta"; state_set TOOLKIT "$have_meta"; [ "$FOXOS_KALI" = 1 ] || kali_export; return 0
+  fi
+  local need; need=$(toolkit_size "$meta")
+  if [ "${FOXOS_DRYRUN:-0}" != 1 ] && [ "$(free_gb)" -lt "$need" ]; then
+    say "not enough disk for $meta (needs ~${need} GB free, have $(free_gb) GB) — skipped; free space and run: foxos-tools toolkit --set $set"
+    return 1
+  fi
+  if [ "$FOXOS_KALI" = 1 ]; then
+    say "installing Kali's standard toolset: $meta (~${need} GB) — this can take a while"
+    confirm "Install $meta now?" || return 0
+    pm_update; pm_install "$meta" || return 1
+  else
+    say "$FOXOS_NAME isn't Kali: installing Kali's standard toolset ($meta, ~${need} GB) in an official"
+    say "Kali container (distrobox + podman). Host packages stay untouched; its tools become normal commands."
+    confirm "Set up the Kali toolkit container now?" || return 0
+    have podman || pkg_ensure podman
+    have distrobox || pkg_ensure distrobox
+    if [ "${FOXOS_DRYRUN:-0}" != 1 ] && ! { have podman && have distrobox; }; then
+      say "podman/distrobox aren't in $FOXOS_NAME's repos — install them (https://distrobox.it), then: foxos-tools toolkit"; return 1
+    fi
+    if [ "${FOXOS_DRYRUN:-0}" = 1 ] || ! distrobox list 2>/dev/null | grep -qw "$BOX"; then
+      run distrobox create --yes --name "$BOX" --image docker.io/kalilinux/kali-rolling:latest || return 1
+      # remember what the bare image ships, so only toolkit binaries get exposed
+      if [ "${FOXOS_DRYRUN:-0}" != 1 ]; then
+        mkdir -p "$(dirname "$STATE")"
+        distrobox enter "$BOX" -- sh -c 'ls -1 /usr/bin /usr/sbin 2>/dev/null' | sort -u > "$HOME/.local/share/foxos/kali-base.txt"
+      fi
+    fi
+    run distrobox enter "$BOX" -- sudo apt-get update -qq
+    run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$meta" || return 1
+    kali_export
+  fi
+  state_set TOOLKIT "$meta"
+  say "standard toolkit ready: $meta. FoxWorx's agent discovers new tools automatically."
+}
+
+# Expose every tool the container's toolkit added (and the host lacks) as a wrapper in ~/.local/bin.
+# Wrappers are marked, so refreshes add new tools and drop ones Kali removed, and never touch other files.
 kali_export() {
-  local cmd tier methods desc path stage
-  stage="$HOME/.local/share/foxos/kali-exports"; mkdir -p "$stage"
-  while IFS='|' read -r cmd tier methods desc; do
-    have "$cmd" && continue
-    if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] export %s from %s → %s/%s\n' "$cmd" "$BOX" "$BIN" "$cmd"; continue; fi
-    path=$(distrobox enter "$BOX" -- sh -c "command -v '$cmd'" 2>/dev/null | tail -1 | tr -d '\r')
-    [ -n "$path" ] || continue
-    distrobox enter "$BOX" -- distrobox-export --bin "$path" --export-path "$stage" >/dev/null 2>&1 || continue
-    [ -f "$stage/$cmd" ] && as_root install -m 0755 "$stage/$cmd" "$BIN/$cmd" && echo "  ✓ $cmd (from Kali container)"
-  done < <(rows)
-  say "Kali container tools are ready. Tools needing raw packet/Wi-Fi access may still need host privileges."
+  local base="$HOME/.local/share/foxos/kali-base.txt" list name dir added=0 removed=0 f
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] expose new container tools as wrappers in %s\n' "$EXPORTS"; return 0; fi
+  list=$(distrobox enter "$BOX" -- sh -c 'for d in /usr/bin /usr/sbin; do for f in "$d"/*; do [ -x "$f" ] && [ ! -d "$f" ] && echo "$f"; done; done' 2>/dev/null | tr -d '\r')
+  [ -n "$list" ] || { say "could not list the container's tools"; return 1; }
+  mkdir -p "$EXPORTS"
+  local hostpath; hostpath=$(printf '%s' "$PATH" | tr ':' '\n' | grep -vxF "$EXPORTS" | paste -sd: -)
+  declare -A keep=()
+  while IFS= read -r f; do
+    name=${f##*/}; dir=${f%/*}
+    [[ $name =~ $DENY ]] && continue
+    [ -f "$base" ] && grep -qx "$name" "$base" && continue
+    if [ -e "$EXPORTS/$name" ] && ! grep -q "^$MARK" "$EXPORTS/$name" 2>/dev/null; then continue; fi  # not ours
+    if [ ! -e "$EXPORTS/$name" ] && PATH="$hostpath" command -v "$name" >/dev/null 2>&1; then continue; fi  # host has it
+    keep[$name]=1
+    if [ ! -e "$EXPORTS/$name" ]; then
+      printf '#!/bin/sh\n%s: %s from container %s (managed by foxos-tools; safe to delete)\nexec distrobox-enter -n %s -- %s "$@"\n' \
+        "$MARK" "$name" "$BOX" "$BOX" "$dir/$name" > "$EXPORTS/$name"
+      chmod 0755 "$EXPORTS/$name"; added=$((added+1))
+    fi
+  done <<< "$list"
+  for f in "$EXPORTS"/*; do
+    [ -f "$f" ] && grep -q "^$MARK" "$f" 2>/dev/null && [ -z "${keep[${f##*/}]:-}" ] && { rm -f "$f"; removed=$((removed+1)); }
+  done
+  say "container tools exposed in $EXPORTS: ${#keep[@]} total (+$added new, -$removed removed)"
+}
+
+# Pull in tools Kali added since last time (and updates), then expose any new ones.
+cmd_update() {
+  local auto=0 a meta; for a in "$@"; do [ "$a" = --auto ] && auto=1; [ "$a" = --yes ] && YES=1; done
+  meta=$(state_get TOOLKIT); meta=${meta:-$(toolkit_present)}
+  if [ -z "$meta" ]; then say "no standard toolkit yet — run: foxos-tools toolkit"; return 0; fi
+  if [ "$FOXOS_KALI" = 1 ]; then
+    if [ $auto = 1 ] && ! sudo -n true 2>/dev/null; then
+      command -v notify-send >/dev/null && notify-send -i security-high "FoxOS tools" "Weekly check: run 'foxos-tools update' to add new Kali tools." 2>/dev/null
+      say "needs your sudo password — run: foxos-tools update"; return 0
+    fi
+    say "refreshing $meta (adds tools Kali has added since your last update)"
+    pm_update; pm_install "$meta"
+    say "for newer versions of the tools themselves run: sudo apt full-upgrade"
+  else
+    have distrobox || { say "distrobox missing — run: foxos-tools toolkit"; return 1; }
+    say "updating the Kali toolkit container ($meta)…"
+    run distrobox enter "$BOX" -- sudo apt-get update -qq
+    run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get full-upgrade -y -qq
+    run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$meta"
+    kali_export
+  fi
+  state_set LAST_UPDATE "$(date +%F)"
+}
+
+# Weekly unattended update (container: fully automatic; Kali host: a reminder, since apt needs sudo).
+cmd_timer() {
+  local u="$HOME/.config/systemd/user" self; self="$(readlink -f "$0")"
+  [ "${1:-}" = --off ] && { run systemctl --user disable --now foxos-tools-update.timer; say "weekly tool updates off"; return; }
+  mkdir -p "$u"
+  printf '[Unit]\nDescription=FoxOS weekly security toolkit update\n\n[Service]\nType=oneshot\nEnvironment=PATH=%s/.local/bin:/usr/local/bin:/usr/bin:/bin\nEnvironment=DISPLAY=:0\nEnvironment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/%s/bus\nExecStart=%s update --auto\n' \
+    "$HOME" "$(id -u)" "$self" > "$u/foxos-tools-update.service"
+  printf '[Unit]\nDescription=FoxOS weekly security toolkit update\n\n[Timer]\nOnCalendar=weekly\nRandomizedDelaySec=6h\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n' \
+    > "$u/foxos-tools-update.timer"
+  run systemctl --user daemon-reload
+  run systemctl --user enable --now foxos-tools-update.timer && say "weekly tool updates on (foxos-tools-update.timer)"
 }
 
 confirm() { [ "$YES" = 1 ] && return 0; [ -t 0 ] || return 1; local a; read -rp "  $1 [y/N] " a; [[ "$a" =~ ^[Yy] ]]; }
@@ -220,7 +307,9 @@ confirm() { [ "$YES" = 1 ] && return 0; [ -t 0 ] || return 1; local a; read -rp 
 case "${1:-check}" in
   check) shift || true; cmd_check "$@" ;;
   install) shift; cmd_install "$@" ;;
-  kali) shift; cmd_kali "$@" ;;
-  -h|--help|help) sed -n 2,15p "$0" ;;
-  *) echo "usage: foxos-tools check | install [--core|--all] [--yes] | kali [--set missing|headless|default] [--yes]"; exit 1 ;;
+  toolkit|kali) shift; cmd_toolkit "$@" ;;
+  update) shift; cmd_update "$@" ;;
+  timer) shift; cmd_timer "$@" ;;
+  -h|--help|help) sed -n 2,22p "$0" ;;
+  *) echo "usage: foxos-tools check | install [--core|--all] | toolkit [--set headless|default|large] | update | timer [--off]"; exit 1 ;;
 esac

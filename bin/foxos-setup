@@ -52,7 +52,9 @@ checklist() {
   else warn "FoxWorx not running — start it from the FoxWorx desktop icon"; fi
   if command -v foxos-tools >/dev/null; then
     t=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -o 'missing: .*')
-    case "$t" in "missing: 0 core, 0 extra") ok "security tools: all present" ;; *) warn "security tools $t (foxos-tools check)" ;; esac
+    case "$t" in "missing: 0 core, 0 extra") ok "DreadFox tools: all present" ;; *) warn "DreadFox tools $t (foxos-tools check)" ;; esac
+    tk=$(sed -n 's/^TOOLKIT=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
+    [ -n "$tk" ] && ok "standard toolset: $tk" || warn "no standard toolset (foxos-tools toolkit)"
   fi
   [ -n "$(lms_bin)" ] && ok "LM Studio installed" || warn "LM Studio not installed"
   main_model && ok "Zenko main model downloaded" || warn "Zenko main model not downloaded"
@@ -86,23 +88,16 @@ fi
 # ------------------------------------------------------------------ 2. security tools
 step "2/7  Security tools"
 if command -v foxos-tools >/dev/null; then
-  missing=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*missing: \([0-9]*\) core, \([0-9]*\) extra.*/\1 \2/p')
-  core=${missing%% *}; extra=${missing##* }
-  if [ "${core:-0}" = 0 ] && [ "${extra:-0}" = 0 ]; then ok "all DreadFox security tools are installed"
+  tk=$(sed -n 's/^TOOLKIT=//p' "$HOME/.local/share/foxos/toolkit.env" 2>/dev/null | tail -1)
+  if [ -n "$tk" ]; then ok "standard toolset: $tk (updated weekly; new Kali tools are added automatically)"
   else
-    say "missing: ${core:-?} core and ${extra:-?} extra tools (details: foxos-tools check)"
-    if ask "Install the missing tools from your distro, verified releases and pipx?" Y; then foxos-tools install --all --yes; fi
-    left=$(foxos-tools check 2>/dev/null | grep -c '✗')
-    if [ "${left:-0}" -gt 0 ]; then
-      if [ "$(. /etc/os-release; echo "$ID")" = kali ]; then
-        ask "Install Kali's standard headless toolset too (kali-linux-headless, a few GB)?" N && foxos-tools kali --set headless --yes
-      else
-        say "$left tool(s) aren't packaged for this distro. An official Kali container can provide them"
-        say "(distrobox + podman; your system packages stay untouched)."
-        ask "Set up the Kali container for the missing tools?" N && foxos-tools kali --set missing --yes
-      fi
-    fi
+    say "No standard security toolset yet. Recommended: kali-linux-headless, Kali's full command-line toolset"
+    say "(~12 GB; on non-Kali systems it runs in an official Kali container). Bigger: default (~25 GB), large (~35 GB)."
+    if ask "Install the standard toolset (headless) now?" Y; then foxos-tools toolkit --set headless --yes && foxos-tools timer >/dev/null
+    elif ask "Install the larger 'default' toolset instead?" N; then foxos-tools toolkit --set default --yes && foxos-tools timer >/dev/null; fi
   fi
+  missing=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*missing: \([0-9]*\) core.*/\1/p')
+  if [ "${missing:-0}" != 0 ] && ask "Fill $missing missing core DreadFox tool(s) individually?" Y; then foxos-tools install --core --yes; fi
 else warn "foxos-tools isn't installed — re-run ~/foxos-kit/install.sh"; fi
 
 # ------------------------------------------------------------------ 3. LM Studio

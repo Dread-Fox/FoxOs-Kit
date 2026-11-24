@@ -5,7 +5,10 @@
 #                                timers, Remote Control service, FoxOS look on Kali)
 #   ./install.sh --no-rice       skip the FoxOS cosmetics
 #   ./install.sh --rice          apply the FoxOS look even when this isn't Kali (rebrands boot/login/GRUB)
-#   ./install.sh --all-tools     also install the extra security tools (see: foxos-tools check)
+#   ./install.sh --all-tools     also install the extra DreadFox tools individually (see: foxos-tools check)
+#   ./install.sh --toolkit SET   standard security toolset if none is present: headless (default; Kali's full
+#                                command-line toolset), default, large, everything, or none. On Kali via apt;
+#                                elsewhere in an official Kali container. Updated weekly (new Kali tools included).
 #   ./install.sh --no-timers     don't enable the H1 sync/recon timers
 #   ./install.sh --no-rc         don't install the Claude Remote Control service
 #   ./install.sh --no-foxworx    don't install the bundled FoxWorx workbench (the companion widget still installs)
@@ -14,10 +17,12 @@
 # Safe to re-run: existing creds, memory and backups are never overwritten.
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RICE=1 RICE_FORCED=0 TIMERS=1 RC=1 FOXWORX=1 ALL_TOOLS=0
-for a in "$@"; do case "$a" in
-  --no-rice) RICE=0 ;; --rice) RICE=1 RICE_FORCED=1 ;; --all-tools) ALL_TOOLS=1 ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
-  -h|--help) sed -n 2,15p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
+RICE=1 RICE_FORCED=0 TIMERS=1 RC=1 FOXWORX=1 ALL_TOOLS=0 TOOLKIT=headless
+PREV=""
+for a in "$@"; do [ "$PREV" = --toolkit ] && { TOOLKIT=$a; PREV=""; continue; }; PREV=$a; case "$a" in
+  --no-rice) RICE=0 ;; --rice) RICE=1 RICE_FORCED=1 ;; --all-tools) ALL_TOOLS=1 ;; --toolkit) ;; --toolkit=*) TOOLKIT=${a#--toolkit=} ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
+  -h|--help) sed -n 2,18p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
+case "$TOOLKIT" in headless|default|large|everything|none) ;; *) echo "--toolkit must be headless, default, large, everything or none"; exit 1 ;; esac
 [ "$(id -u)" -eq 0 ] && { echo "run as your normal user, not root"; exit 1; }
 say() { printf '\033[38;5;160m[foxos]\033[0m %s\n' "$*"; }
 tmpl() { sed -e "s#@HOME@#$HOME#g" -e "s#@UID@#$(id -u)#g" "$1"; }
@@ -26,7 +31,7 @@ tmpl() { sed -e "s#@HOME@#$HOME#g" -e "s#@UID@#$(id -u)#g" "$1"; }
 foxos_detect
 say "machine: $(uname -m) · $FOXOS_NAME · packages: $FOXOS_PM · user: $USER"
 [ "$FOXOS_PM" = unknown ] && { say "no supported package manager found (apt, dnf, pacman or zypper)"; exit 1; }
-[ "$FOXOS_KALI" = 1 ] || say "not Kali: best-effort install. Tools Kali packages but $FOXOS_NAME doesn't can come from a Kali container later (foxos-tools kali)."
+[ "$FOXOS_KALI" = 1 ] || say "not Kali: best-effort install. Kali's standard toolset will come from an official Kali container."
 if [ $RICE = 1 ] && [ "$FOXOS_KALI" != 1 ] && [ $RICE_FORCED = 0 ]; then
   RICE=0; say "skipping the FoxOS look on $FOXOS_NAME (it rebrands the system, login, boot splash and GRUB). Force it with --rice."
 fi
@@ -183,6 +188,16 @@ if [ $FOXWORX = 1 ]; then
     systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true
     say "linked the DreadFox desktop companion to FoxWorx"
   fi
+  # Tools exposed from the Kali toolkit container live in ~/.local/bin: let FoxWorx's agent find them.
+  if [ -f "$SE" ]; then
+    cur=$(sed -n 's/^FOXWORX_EXTRA_TOOL_PATHS="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$SE" | tail -1)
+    case ":$cur:" in
+      *":$HOME/.local/bin:"*) ;;
+      *) new="${cur:+$cur:}$HOME/.local/bin"
+         if grep -q '^FOXWORX_EXTRA_TOOL_PATHS=' "$SE"; then sed -i "s#^FOXWORX_EXTRA_TOOL_PATHS=.*#FOXWORX_EXTRA_TOOL_PATHS=\"$new\"#" "$SE"
+         else printf 'FOXWORX_EXTRA_TOOL_PATHS="%s"\n' "$new" >> "$SE"; fi ;;
+    esac
+  fi
   if [ "${FW_NEW:-0}" = 1 ]; then
     systemctl --user restart foxworx-workbench.service 2>/dev/null && say "FoxWorx is running: http://127.0.0.1:8765" \
       || say "  FoxWorx didn't start yet — foxos-setup will retry"
@@ -191,6 +206,15 @@ fi
 
 # ------------------------------------------------------------------ FoxOS look
 [ $RICE = 1 ] && bash "$KIT/foxos/apply-foxos.sh" "$KIT"
+
+# ------------------------------------------------------------------ standard security toolset (last: it's big)
+if [ "$TOOLKIT" != none ]; then
+  say "standard security toolset ($TOOLKIT)…"
+  bash "$KIT/bin/foxos-tools" toolkit --set "$TOOLKIT" --yes \
+    || say "  toolset not installed now — run later: foxos-tools toolkit --set $TOOLKIT"
+  bash "$KIT/bin/foxos-tools" timer >/dev/null 2>&1 && say "  weekly toolset updates on (new Kali tools are added automatically)"
+  systemctl --user try-restart foxworx-workbench.service 2>/dev/null || true  # pick up new tool paths
+fi
 
 say "toolkit catalog…"; toolkit >/dev/null 2>&1 || true
 say "base install done. Desktop: FoxWorx · DreadFox Companion · Bounty Radar"
