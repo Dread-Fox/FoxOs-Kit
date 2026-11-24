@@ -3,6 +3,8 @@
 set -euo pipefail
 umask 077
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+# Interpreter for the virtualenv: FOXWORX_PYTHON (e.g. a uv-managed 3.12 on older distros), else python3.
+PY="${FOXWORX_PYTHON:-python3}"
 SKIP_APT=0; NO_START=0; WITHOUT_AI=0; PREFLIGHT=0
 for arg in "$@"; do
   case "$arg" in
@@ -15,8 +17,8 @@ for arg in "$@"; do
   esac
 done
 if [[ "$PREFLIGHT" -eq 1 ]]; then
-  python3 -m foxworx.platforms --require
-  python3 -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ is required"'
+  "$PY" -m foxworx.platforms --require
+  "$PY" -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ is required (set FOXWORX_PYTHON to a newer interpreter)"'
   echo 'Preflight completed. No files, packages, drivers or services were modified.'
   exit 0
 fi
@@ -26,10 +28,10 @@ fi
 [[ "$HOME" != *[[:space:]%\"\\]* ]] || { echo 'Home path contains characters unsupported by this installer.' >&2; exit 1; }
 cd "$ROOT"
 # Fail before sudo, apt or any local writes on unsupported kernels/architectures.
-python3 -m foxworx.platforms --require
-PROFILE="$(python3 -m foxworx.platforms --profile)"
+"$PY" -m foxworx.platforms --require
+PROFILE="$("$PY" -m foxworx.platforms --profile)"
 echo "Detected supported Kali/Linux host profile: $PROFILE (x86-64 or ARM64)"
-python3 -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ is required"'
+"$PY" -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ is required (set FOXWORX_PYTHON to a newer interpreter)"'
 if [[ "$SKIP_APT" -eq 0 ]]; then
   command -v apt-get >/dev/null || { echo 'No apt-get: install Python 3.11+, python3-venv, ca-certificates manually; rerun --skip-apt.' >&2; exit 1; }
   echo 'Checking existing OS packages; no tunnel packages are required.'
@@ -41,18 +43,19 @@ if [[ "$SKIP_APT" -eq 0 ]]; then
     echo 'Required OS packages already installed; skipping sudo/apt.'
   fi
 fi
-python3 -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ is required"'
+"$PY" -c 'import sys; assert sys.version_info >= (3,11), "Python 3.11+ is required (set FOXWORX_PYTHON to a newer interpreter)"'
 echo 'No NVIDIA driver, CUDA package, Ollama daemon or Kali tool bundle will be installed automatically.'
+SYSTEMD=1
 if ! systemctl --user show-environment >/dev/null 2>&1; then
-  echo 'No usable systemd user session. Log in normally as the operator (not sudo su), then rerun.' >&2
-  exit 1
+  SYSTEMD=0
+  echo 'No systemd user session: installing without a service. Start/stop with: bash scripts/serve.sh start|stop|status'
 fi
-if systemctl --user is-active --quiet foxworx-workbench; then
+if [[ "$SYSTEMD" -eq 1 ]] && systemctl --user is-active --quiet foxworx-workbench; then
   echo 'Stop the existing v2 service before updating: systemctl --user stop foxworx-workbench' >&2
   echo 'Stopping terminates live terminal sessions and managed jobs. Archive needed evidence first.' >&2
   exit 1
 fi
-python3 -m venv .venv
+"$PY" -m venv .venv
 .venv/bin/python -m pip install --disable-pip-version-check -r requirements.txt
 if [[ "$WITHOUT_AI" -eq 0 ]]; then
   echo "Installing optional LiteLLM provider SDK (can take longer on ARM64)..."
@@ -63,10 +66,15 @@ fi
 # On upgrade, existing authentication, port and origins are preserved; only the
 # legacy unacknowledged open mode is moved to login-required local mode.
 .venv/bin/python -m foxworx.cli configure --upgrade --profile "$PROFILE"
+if [[ "$SYSTEMD" -eq 0 ]]; then
+  [[ "$NO_START" -eq 1 ]] || bash "$ROOT/scripts/serve.sh" start
+  printf 'Installed v3.8.1 in %s (no systemd: bash scripts/serve.sh start|stop|status)\n' "$ROOT"
+  exit 0
+fi
 mkdir -p "$HOME/.config/systemd/user"
 cat > "$HOME/.config/systemd/user/foxworx-workbench.service" <<EOF
 [Unit]
-Description=FOXWORX Kali Workbench v3.8.0 (authenticated local service)
+Description=FOXWORX Kali Workbench v3.8.1 (authenticated local service)
 After=network.target
 
 [Service]
@@ -106,7 +114,7 @@ PY
   systemctl --user is-active --quiet foxworx-workbench || { journalctl --user -u foxworx-workbench -n 40 --no-pager; exit 1; }
 fi
 echo
-printf 'Installed v3.8.0 in %s\n' "$ROOT"
+printf 'Installed v3.8.1 in %s\n' "$ROOT"
 echo 'Local browser:           http://127.0.0.1:8765  (sign-in required)'
 echo 'First sign-in:           the setup token printed above (fresh installs and security upgrades only)'
 echo 'Named operator accounts: bash scripts/operator.sh add <name>'

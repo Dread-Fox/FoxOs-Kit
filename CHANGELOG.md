@@ -1,3 +1,8 @@
+## v3.8.1 — Runs on systems without systemd or with an older Python
+
+- `scripts/install.sh` no longer stops without a systemd user session (Alpine, Void, Devuan, Artix, containers): it installs normally, skips the service unit and starts FOXWORX with the new `scripts/serve.sh start|stop|status|restart` (PID file and log in `~/.local/state/foxworx/`).
+- `FOXWORX_PYTHON` selects the interpreter for the virtualenv, so distros with Python older than 3.11 (Ubuntu 22.04, Debian 11, RHEL 8/9) can use a separately installed Python 3.11+ (the FoxOS kit provides one via uv) without touching the system Python.
+
 ## v3.8.0 — Tool store: find and add security tools by keyword
 
 - **Tool store** (Tool Intelligence tab, `/api/store/*`): search by a cyber keyword ("subdomain", "wifi", "jwt", "active directory") across the distro's repositories (apt/pacman/dnf, with security toolset categories; library, debug and firmware packages filtered out) and a vetted catalog of ProjectDiscovery, pipx and Go tools. User-level tools install directly (ProjectDiscovery binaries SHA-256 checked against each release's checksums); system packages are typed into the terminal as the exact sudo command for the operator to review. Installed tools are recognised immediately (registry rescan), with the catalog's category and description.
