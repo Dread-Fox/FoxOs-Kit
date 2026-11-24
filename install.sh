@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# FoxOS kit installer — sets up an independent DreadFox on a fresh Kali box.
+# FoxOS kit installer — sets up an independent DreadFox on Kali, or on Debian/Ubuntu (apt), Fedora (dnf),
+# Arch (pacman) or openSUSE (zypper). Kali is the tested platform; the others are best-effort.
 #   ./install.sh                 everything (tools, h1/recon, websec, toolkit, Claude skills+memory seed,
-#                                timers, Remote Control service, FoxOS look)
+#                                timers, Remote Control service, FoxOS look on Kali)
 #   ./install.sh --no-rice       skip the FoxOS cosmetics
+#   ./install.sh --rice          apply the FoxOS look even when this isn't Kali (rebrands boot/login/GRUB)
+#   ./install.sh --all-tools     also install the extra security tools (see: foxos-tools check)
 #   ./install.sh --no-timers     don't enable the H1 sync/recon timers
 #   ./install.sh --no-rc         don't install the Claude Remote Control service
 #   ./install.sh --no-foxworx    don't install the bundled FoxWorx workbench (the companion widget still installs)
@@ -11,25 +14,38 @@
 # Safe to re-run: existing creds, memory and backups are never overwritten.
 set -euo pipefail
 KIT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-RICE=1 TIMERS=1 RC=1 FOXWORX=1
+RICE=1 RICE_FORCED=0 TIMERS=1 RC=1 FOXWORX=1 ALL_TOOLS=0
 for a in "$@"; do case "$a" in
-  --no-rice) RICE=0 ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
-  -h|--help) sed -n 2,12p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
+  --no-rice) RICE=0 ;; --rice) RICE=1 RICE_FORCED=1 ;; --all-tools) ALL_TOOLS=1 ;; --no-timers) TIMERS=0 ;; --no-rc) RC=0 ;; --no-foxworx) FOXWORX=0 ;;
+  -h|--help) sed -n 2,15p "$0"; exit 0 ;; *) echo "unknown option $a"; exit 1 ;; esac; done
 [ "$(id -u)" -eq 0 ] && { echo "run as your normal user, not root"; exit 1; }
 say() { printf '\033[38;5;160m[foxos]\033[0m %s\n' "$*"; }
 tmpl() { sed -e "s#@HOME@#$HOME#g" -e "s#@UID@#$(id -u)#g" "$1"; }
-grep -qi kali /etc/os-release || say "warning: this doesn't look like Kali — continuing anyway"
-say "machine: $(uname -m) · user: $USER · home: $HOME"
+# shellcheck source=bin/foxos-pkg.sh
+. "$KIT/bin/foxos-pkg.sh"
+foxos_detect
+say "machine: $(uname -m) · $FOXOS_NAME · packages: $FOXOS_PM · user: $USER"
+[ "$FOXOS_PM" = unknown ] && { say "no supported package manager found (apt, dnf, pacman or zypper)"; exit 1; }
+[ "$FOXOS_KALI" = 1 ] || say "not Kali: best-effort install. Tools Kali packages but $FOXOS_NAME doesn't can come from a Kali container later (foxos-tools kali)."
+if [ $RICE = 1 ] && [ "$FOXOS_KALI" != 1 ] && [ $RICE_FORCED = 0 ]; then
+  RICE=0; say "skipping the FoxOS look on $FOXOS_NAME (it rebrands the system, login, boot splash and GRUB). Force it with --rice."
+fi
 
 # ------------------------------------------------------------------ packages
-say "installing packages (apt)…"
-sudo apt-get update -qq
-PKGS="python3 python3-tk python3-yaml python3-pil git curl jq whois dnsutils libnotify-bin xdotool xdg-utils
-      subfinder dnsx httpx-toolkit nuclei katana amass theharvester figlet imagemagick fonts-dejavu fonts-firacode
-      python3-venv ca-certificates aria2 zenity libfuse2t64 libfuse2 tor"
-[ $RICE = 1 ] && PKGS="$PKGS plymouth plymouth-themes"
-avail=""; for p in $PKGS; do apt-cache show "$p" >/dev/null 2>&1 && avail="$avail $p" || say "  (not in apt: $p — skipped)"; done
-sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $avail
+say "installing base packages ($FOXOS_PM)…"
+pm_update
+BASE="python3 python3-tk python3-yaml python3-pil python3-venv git curl jq whois dig libnotify xdotool xdg-utils figlet
+      imagemagick font-dejavu font-fira ca-certificates aria2 zenity libfuse2 tor unzip"
+[ $RICE = 1 ] && BASE="$BASE plymouth plymouth-themes"
+# shellcheck disable=SC2086
+pkg_ensure $BASE
+[ -n "${FOXOS_SKIPPED:-}" ] && say "  not packaged by $FOXOS_NAME (skipped):${FOXOS_SKIPPED}"
+python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' || { say "Python 3.11 or newer is required (found $(python3 -V 2>&1))"; exit 1; }
+
+# security tools DreadFox depends on (distro packages, verified release binaries, or pipx)
+mkdir -p "$HOME/.local/share/foxos" && cp "$KIT/bin/foxos-pkg.sh" "$HOME/.local/share/foxos/foxos-pkg.sh"
+say "security tools…"
+bash "$KIT/bin/foxos-tools" install "$([ $ALL_TOOLS = 1 ] && echo --all || echo --core)" --yes || say "  some tools could not be installed — see: foxos-tools check"
 
 # ------------------------------------------------------------------ Claude Code
 if ! command -v claude >/dev/null && [ ! -x "$HOME/.local/bin/claude" ]; then
@@ -72,7 +88,7 @@ cp "$KIT/zenko/"* "$HOME/zenko-scripts/" && chmod +x "$HOME/zenko-scripts/"*.sh
 
 # FoxWorx launcher (starts the workbench if needed, then opens it)
 mkdir -p "$HOME/.local/bin"
-for b in foxworx-launch foxworx-api foxos-setup; do install -m 755 "$KIT/bin/$b" "$HOME/.local/bin/$b"; done
+for b in foxworx-launch foxworx-api foxos-setup foxos-tools; do install -m 755 "$KIT/bin/$b" "$HOME/.local/bin/$b"; done
 
 # desktop entries: Bounty Radar, DreadFox Companion, FoxWorx
 mkdir -p "$HOME/.local/share/applications" "$HOME/Desktop"
@@ -144,7 +160,7 @@ if [ $FOXWORX = 1 ]; then
   if [ ! -x "$FW/.venv/bin/python" ]; then
     LOGD="$HOME/.local/state/foxos"; mkdir -p "$LOGD"
     say "installing FoxWorx (Python packages; a few minutes — log: $LOGD/foxworx-install.log)…"
-    if (cd "$FW" && bash scripts/install.sh --no-start) > "$LOGD/foxworx-install.log" 2>&1; then
+    if (cd "$FW" && bash scripts/install.sh --no-start $([ "$FOXOS_PM" = apt ] || echo --skip-apt)) > "$LOGD/foxworx-install.log" 2>&1; then
       # Local-only workbench: no login wall. Loopback listener only; tunnels/proxies stay refused.
       (cd "$FW" && bash scripts/configure.sh --insecure-open-mode) >> "$LOGD/foxworx-install.log" 2>&1 \
         && say "  FoxWorx set to no-login local mode (http://127.0.0.1:8765, this machine only)"

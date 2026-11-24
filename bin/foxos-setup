@@ -50,6 +50,10 @@ checklist() {
       *)        warn "Dens: $(fw_field "d['dens']['tor']")" ;;
     esac
   else warn "FoxWorx not running — start it from the FoxWorx desktop icon"; fi
+  if command -v foxos-tools >/dev/null; then
+    t=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | grep -o 'missing: .*')
+    case "$t" in "missing: 0 core, 0 extra") ok "security tools: all present" ;; *) warn "security tools $t (foxos-tools check)" ;; esac
+  fi
   [ -n "$(lms_bin)" ] && ok "LM Studio installed" || warn "LM Studio not installed"
   main_model && ok "Zenko main model downloaded" || warn "Zenko main model not downloaded"
   zenko_loaded && ok "zenko-main loaded in LM Studio" || warn "zenko-main not loaded (run ~/zenko-scripts/load_zenko.sh)"
@@ -65,7 +69,7 @@ printf '\n%s%s  FoxOS guided setup%s\n' "$B" "$C" "$N"
 printf '%s  Each step asks first. Re-run any time with: foxos-setup   (status only: foxos-setup --check)%s\n' "$D" "$N"
 
 # ------------------------------------------------------------------ 1. FoxWorx: running, no login wall
-step "1/6  FoxWorx workbench"
+step "1/7  FoxWorx workbench"
 if [ ! -x "$FW/.venv/bin/python" ]; then warn "FoxWorx isn't installed — re-run ~/foxos-kit/install.sh first"
 else
   if [ -f "$SE" ] && ! grep -q '^FOXWORX_AUTH_MODE="\{0,1\}open' "$SE"; then
@@ -79,8 +83,30 @@ else
   else warn "FoxWorx didn't start. Details: journalctl --user -u foxworx-workbench -n 30"; fi
 fi
 
-# ------------------------------------------------------------------ 2. LM Studio
-step "2/6  LM Studio (runs the local abliterated models)"
+# ------------------------------------------------------------------ 2. security tools
+step "2/7  Security tools"
+if command -v foxos-tools >/dev/null; then
+  missing=$(foxos-tools check 2>/dev/null | sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*missing: \([0-9]*\) core, \([0-9]*\) extra.*/\1 \2/p')
+  core=${missing%% *}; extra=${missing##* }
+  if [ "${core:-0}" = 0 ] && [ "${extra:-0}" = 0 ]; then ok "all DreadFox security tools are installed"
+  else
+    say "missing: ${core:-?} core and ${extra:-?} extra tools (details: foxos-tools check)"
+    if ask "Install the missing tools from your distro, verified releases and pipx?" Y; then foxos-tools install --all --yes; fi
+    left=$(foxos-tools check 2>/dev/null | grep -c '✗')
+    if [ "${left:-0}" -gt 0 ]; then
+      if [ "$(. /etc/os-release; echo "$ID")" = kali ]; then
+        ask "Install Kali's standard headless toolset too (kali-linux-headless, a few GB)?" N && foxos-tools kali --set headless --yes
+      else
+        say "$left tool(s) aren't packaged for this distro. An official Kali container can provide them"
+        say "(distrobox + podman; your system packages stay untouched)."
+        ask "Set up the Kali container for the missing tools?" N && foxos-tools kali --set missing --yes
+      fi
+    fi
+  fi
+else warn "foxos-tools isn't installed — re-run ~/foxos-kit/install.sh"; fi
+
+# ------------------------------------------------------------------ 3. LM Studio
+step "3/7  LM Studio (runs the local abliterated models)"
 if [ -n "$(lms_bin)" ]; then ok "LM Studio already installed"
 elif ask "Download and install LM Studio (~1 GB)?" Y; then
   mkdir -p "$(dirname "$LMS_APP")"
@@ -107,8 +133,8 @@ EOF
   else rm -f "$LMS_APP.part"; warn "download failed — try again later with foxos-setup"; fi
 else warn "skipped — Zenko and the FoxWorx AI need LM Studio (or another provider you set in FoxWorx)"; fi
 
-# ------------------------------------------------------------------ 3. models + GPU tuning
-step "3/6  Zenko models"
+# ------------------------------------------------------------------ 4. models + GPU tuning
+step "4/7  Zenko models"
 if main_model; then ok "main model already downloaded"
   ask "Also download the extra reasoning + fallback models (~28 GB more)?" N && ~/zenko-scripts/fetch_models.sh all
 elif [ -n "$(lms_bin)" ]; then
@@ -131,8 +157,8 @@ if [ ! -f "$ZENV" ]; then
   [ "$V" -eq 0 ] && warn "no NVIDIA GPU found — the model will run on CPU (slow; needs ~24 GB RAM)"
 else ok "GPU settings: $(grep -v '^#' "$ZENV" | tr '\n' ' ')"; fi
 
-# ------------------------------------------------------------------ 4. load model + connect FoxWorx
-step "4/6  Load Zenko and connect FoxWorx to it"
+# ------------------------------------------------------------------ 5. load model + connect FoxWorx
+step "5/7  Load Zenko and connect FoxWorx to it"
 if zenko_loaded; then ok "zenko-main already loaded"
 elif main_model && [ -n "$(lms_bin)" ] && ask "Load zenko-main now (about a minute)?" Y; then
   ~/zenko-scripts/load_zenko.sh 2>&1 | tail -3 | sed 's/^/  /'
@@ -144,8 +170,8 @@ if fw_status >/dev/null; then
     "$API" select lmstudio zenko-main lmstudio-local | sed 's/^/  /'; fi
 elif [ $? -eq 3 ]; then warn "FoxWorx asks for a login, so set the model in its web page: Provider & model → LM Studio → zenko-main"; fi
 
-# ------------------------------------------------------------------ 5. DreadFox
-step "5/6  Your DreadFox companion"
+# ------------------------------------------------------------------ 6. DreadFox
+step "6/7  Your DreadFox companion"
 if fw_status >/dev/null; then
   if [ "$(fw_field "d['pet_hatched']")" = True ]; then ok "already hatched: $(fw_field "d['pet_name']")"
   elif ask "Hatch your DreadFox now?" Y; then
@@ -156,8 +182,8 @@ if fw_status >/dev/null; then
   fi
 else warn "FoxWorx isn't reachable — hatch it later in the FoxWorx web page (DreadFox tab)"; fi
 
-# ------------------------------------------------------------------ 6. HackerOne + Claude
-step "6/6  HackerOne and Claude Code"
+# ------------------------------------------------------------------ 7. HackerOne + Claude
+step "7/7  HackerOne and Claude Code"
 if [ ! -s "$CREDS" ] && ask "Add your HackerOne API username and token now?" Y; then
   read -rp "  HackerOne API username: " U
   if [ -n "$U" ]; then read -rsp "  HackerOne API token (hidden): " T; echo

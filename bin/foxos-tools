@@ -1,0 +1,226 @@
+#!/usr/bin/env bash
+# foxos-tools — make sure this machine has the security tools DreadFox uses, on any supported distro.
+#
+#   foxos-tools check                 what's present / missing (core = needed by DreadFox features)
+#   foxos-tools install [--core|--all] [--yes]
+#        fill gaps: distro packages first, then official ProjectDiscovery release binaries
+#        (SHA-256 checked against the release checksums), then isolated pipx installs.
+#   foxos-tools kali [--set missing|headless|default] [--yes]
+#        the full Kali toolset. On Kali: Kali's metapackages via apt. Anywhere else: an official
+#        Kali container (distrobox + podman) whose tools are exposed as normal commands, without
+#        touching the host's packages. 'missing' = just the tools still missing here.
+#
+# Tools land in /usr/local/bin (FoxWorx and the h1 timers search there). Run as your normal user;
+# it asks for sudo when needed. FOXOS_DRYRUN=1 prints the plan without changing anything.
+set -uo pipefail
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+LIB="$HERE/foxos-pkg.sh"; [ -f "$LIB" ] || LIB="$HOME/.local/share/foxos/foxos-pkg.sh"
+# shellcheck source=foxos-pkg.sh
+. "$LIB"
+foxos_detect
+BIN="${FOXOS_BIN_DIR:-/usr/local/bin}"
+BOX="${FOXOS_KALI_BOX:-foxos-kali}"
+C=$'\033[38;5;160m' G=$'\033[38;5;71m' Y=$'\033[38;5;178m' D=$'\033[2m' N=$'\033[0m'
+say() { printf '%s[foxos-tools]%s %s\n' "$C" "$N" "$*"; }
+YES=0
+
+# cmd | tier | install methods (tried in order) | what it's for
+#   pkg            distro package (names mapped per distro in foxos-pkg.sh)
+#   pd:REPO        ProjectDiscovery GitHub release binary
+#   pipx:SPEC      Python app in its own venv
+#   kali:PKG       Kali package (inside the Kali container on non-Kali distros)
+TOOLS='
+nmap|core|pkg kali:nmap|port/service scanning (FoxWorx workflows)
+curl|core|pkg kali:curl|HTTP checks (FoxWorx workflows)
+dig|core|pkg kali:dnsutils|DNS lookups (FoxWorx, h1 recon)
+whois|core|pkg kali:whois|domain ownership (FoxWorx)
+openssl|core|pkg kali:openssl|TLS certificate checks (FoxWorx)
+whatweb|core|pkg kali:whatweb|web fingerprinting (FoxWorx)
+subfinder|core|pkg pd:subfinder kali:subfinder|passive subdomains (h1 recon/hunt)
+dnsx|core|pkg pd:dnsx kali:dnsx|DNS resolution at scale (h1 recon/hunt)
+httpx-toolkit|core|pkg pd:httpx kali:httpx-toolkit|HTTP probing (h1 recon/hunt)
+nuclei|core|pkg pd:nuclei kali:nuclei|template checks (h1 hunt)
+tor|core|pkg|Dens (peer-to-peer over Tor; always from your distro)
+katana|extra|pkg pd:katana kali:katana|web crawling
+amass|extra|pkg kali:amass|attack-surface mapping
+theHarvester|extra|pkg kali:theharvester|OSINT (emails, hosts)
+nikto|extra|pkg kali:nikto|web server checks
+sqlmap|extra|pkg pipx:sqlmap kali:sqlmap|SQL injection testing
+ffuf|extra|pkg kali:ffuf|web fuzzing
+gobuster|extra|pkg kali:gobuster|content/DNS brute forcing
+feroxbuster|extra|pkg kali:feroxbuster|recursive content discovery
+wpscan|extra|pkg kali:wpscan|WordPress scanning
+hydra|extra|pkg kali:hydra|online password attacks
+john|extra|pkg kali:john|offline hash cracking
+hashcat|extra|pkg kali:hashcat|GPU hash cracking
+netexec|extra|pkg pipx:git+https://github.com/Pennyw0rth/NetExec kali:netexec|SMB/AD assessment
+impacket-secretsdump|extra|pkg kali:impacket-scripts|Windows/AD protocols (impacket)
+searchsploit|extra|pkg kali:exploitdb|exploit database search
+msfconsole|extra|pkg kali:metasploit-framework|Metasploit
+responder|extra|pkg kali:responder|LLMNR/NBT-NS capture
+tcpdump|extra|pkg kali:tcpdump|packet capture
+tshark|extra|pkg kali:tshark|packet analysis
+masscan|extra|pkg kali:masscan|fast port scanning
+sslscan|extra|pkg kali:sslscan|TLS configuration
+binwalk|extra|pkg kali:binwalk|firmware analysis
+exiftool|extra|pkg kali:libimage-exiftool-perl|file metadata
+radare2|extra|pkg kali:radare2|reverse engineering
+aircrack-ng|extra|pkg kali:aircrack-ng|Wi-Fi auditing
+'
+
+rows() { printf '%s\n' "$TOOLS" | grep '|' ; }
+have() { command -v "$1" >/dev/null 2>&1 || [ -x "$BIN/$1" ]; }
+
+# ------------------------------------------------------------------ check
+cmd_check() {
+  local cmd tier methods desc miss_core=0 miss_extra=0
+  say "$FOXOS_NAME · $FOXOS_PM · $FOXOS_ARCH"
+  while IFS='|' read -r cmd tier methods desc; do
+    if have "$cmd"; then printf '  %s✓%s %-22s %s%s%s\n' "$G" "$N" "$cmd" "$D" "$desc" "$N"
+    else
+      printf '  %s✗%s %-22s %s %s(%s)%s\n' "$Y" "$N" "$cmd" "$desc" "$D" "$tier" "$N"
+      [ "$tier" = core ] && miss_core=$((miss_core+1)) || miss_extra=$((miss_extra+1))
+    fi
+  done < <(rows)
+  echo
+  say "missing: $miss_core core, $miss_extra extra"
+  [ $miss_core -gt 0 ] && say "fill core gaps:  foxos-tools install --core"
+  [ $miss_extra -gt 0 ] && say "everything:      foxos-tools install --all   then   foxos-tools kali --set missing"
+  return 0
+}
+
+# ------------------------------------------------------------------ helpers
+as_root() { if [ -w "$BIN" ] && [ "${FOXOS_FORCE_SUDO:-0}" != 1 ]; then run "$@"; else run sudo "$@"; fi; }
+
+pd_install() (   # pd_install REPO TARGET_NAME  (subshell: its temp dir is always cleaned up)
+  repo=$1 target=$2
+  have unzip || pkg_ensure unzip
+  tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+  api=$(curl -fsSL --max-time 30 "https://api.github.com/repos/projectdiscovery/$repo/releases/latest") || { echo "    GitHub API unreachable"; exit 1; }
+  ver=$(printf '%s' "$api" | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"].lstrip("v"))') || exit 1
+  asset="${repo}_${ver}_linux_${FOXOS_ARCH}.zip"; sums="${repo}_${ver}_checksums.txt"
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] download %s (verify against %s) → %s/%s\n' "$asset" "$sums" "$BIN" "$target"; exit 0; fi
+  curl -fsSL --max-time 300 -o "$tmp/$asset" "https://github.com/projectdiscovery/$repo/releases/download/v$ver/$asset" || exit 1
+  curl -fsSL --max-time 60 -o "$tmp/sums" "https://github.com/projectdiscovery/$repo/releases/download/v$ver/$sums" || exit 1
+  want=$(awk -v f="$asset" '$2==f{print $1}' "$tmp/sums"); got=$(sha256sum "$tmp/$asset" | cut -d' ' -f1)
+  if [ -z "$want" ] || [ "$want" != "$got" ]; then echo "    checksum mismatch for $asset — not installed"; exit 1; fi
+  (cd "$tmp" && unzip -q -o "$asset" "$repo") || exit 1
+  as_root install -m 0755 "$tmp/$repo" "$BIN/$target" || exit 1
+  echo "    $target $ver (verified sha256 ${got:0:12}…)"
+)
+
+pipx_install() {   # pipx_install SPEC CMD
+  local spec=$1 cmd=$2
+  have pipx || pkg_ensure pipx
+  have pipx || [ "${FOXOS_DRYRUN:-0}" = 1 ] || { echo "    pipx unavailable"; return 1; }
+  as_root env PIPX_HOME=/opt/foxos/pipx PIPX_BIN_DIR="$BIN" pipx install --quiet "$spec"
+  have "$cmd" || [ "${FOXOS_DRYRUN:-0}" = 1 ]
+}
+
+# ------------------------------------------------------------------ install
+cmd_install() {
+  local scope=core cmd tier methods desc m done_ kali_left=()
+  for a in "$@"; do case "$a" in --core) scope=core ;; --all) scope=all ;; --yes|-y) YES=1 ;; esac; done
+  say "$FOXOS_NAME · installing ${scope} security tools that are missing"
+  [ "$FOXOS_PM" = unknown ] && say "unknown package manager: only release binaries can be installed"
+  pm_update
+  while IFS='|' read -r cmd tier methods desc; do
+    [ "$scope" = core ] && [ "$tier" != core ] && continue
+    have "$cmd" && continue
+    printf '  • %-22s ' "$cmd"
+    done_=0
+    for m in $methods; do
+      case "$m" in
+        pkg)
+          local c found=""
+          for c in $(pkgnames "$cmd"); do pm_has "$c" && { found=$c; break; }; done
+          if [ -n "$found" ]; then echo "→ package $found"; pm_install "$found" && { have "$cmd" || [ "${FOXOS_DRYRUN:-0}" = 1 ]; } && { done_=1; break; }; fi ;;
+        pd:*) echo "→ ProjectDiscovery release"; pd_install "${m#pd:}" "$cmd" && { done_=1; break; } ;;
+        pipx:*) echo "→ pipx"; pipx_install "${m#pipx:}" "$cmd" && { done_=1; break; } ;;
+        kali:*) if [ "$FOXOS_KALI" = 1 ]; then echo "→ Kali package ${m#kali:}"; pm_install "${m#kali:}" && { done_=1; break; }
+                else kali_left+=("$cmd"); echo "→ needs the Kali container (foxos-tools kali)"; done_=2; fi ;;
+      esac
+    done
+    [ $done_ = 0 ] && echo "    could not install $cmd here"
+  done < <(rows)
+  if [ ${#kali_left[@]} -gt 0 ]; then
+    say "${#kali_left[@]} tool(s) aren't packaged for $FOXOS_NAME: ${kali_left[*]}"
+    say "get them from an official Kali container:  foxos-tools kali --set missing"
+  fi
+  say "done. Check with: foxos-tools check"
+}
+
+# ------------------------------------------------------------------ kali
+kali_pkgs_for_missing() {
+  local cmd tier methods desc m out=()
+  while IFS='|' read -r cmd tier methods desc; do
+    have "$cmd" && continue
+    for m in $methods; do [[ $m == kali:* ]] && out+=("${m#kali:}"); done
+  done < <(rows)
+  printf '%s\n' "${out[@]}" | sort -u | tr '\n' ' '
+}
+
+cmd_kali() {
+  local set=missing a pkgs
+  for a in "$@"; do case "$a" in --set=*) set=${a#--set=} ;; missing|headless|default) set=$a ;; --yes|-y) YES=1 ;; esac; done
+  local prev=""; for a in "$@"; do [ "$prev" = --set ] && set=$a; prev=$a; done
+  case "$set" in
+    missing) pkgs=$(kali_pkgs_for_missing) ;;
+    headless) pkgs="kali-linux-headless" ;;
+    default) pkgs="kali-linux-default" ;;
+    *) say "unknown set '$set' (missing | headless | default)"; return 1 ;;
+  esac
+  if [ -z "${pkgs// /}" ]; then say "nothing missing — all DreadFox tools are present"; return 0; fi
+  local size="from a few hundred MB up to ~3 GB (Metasploit is the largest)"; [ "$set" = headless ] && size="about 4–6 GB"; [ "$set" = default ] && size="about 10–15 GB"
+  if [ "$FOXOS_KALI" = 1 ]; then
+    say "Kali detected: installing via apt ($size): $pkgs"
+    confirm "Install now?" || return 0
+    pm_update; # shellcheck disable=SC2086
+    pm_install $pkgs
+    return
+  fi
+  say "$FOXOS_NAME isn't Kali: the tools come from an official Kali container (kalilinux/kali-rolling)"
+  say "via distrobox + podman. Your system packages stay untouched. Download: $size."
+  say "Kali packages: $pkgs"
+  confirm "Set up the Kali container now?" || return 0
+  have podman || pkg_ensure podman
+  have distrobox || pkg_ensure distrobox
+  if [ "${FOXOS_DRYRUN:-0}" != 1 ] && ! { have podman && have distrobox; }; then
+    say "podman/distrobox aren't available from $FOXOS_NAME's repos — install them, then re-run (see https://distrobox.it)"; return 1
+  fi
+  if [ "${FOXOS_DRYRUN:-0}" = 1 ] || ! distrobox list 2>/dev/null | grep -qw "$BOX"; then
+    run distrobox create --yes --name "$BOX" --image docker.io/kalilinux/kali-rolling:latest
+  fi
+  run distrobox enter "$BOX" -- sudo apt-get update -qq
+  # shellcheck disable=SC2086
+  run distrobox enter "$BOX" -- sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq $pkgs
+  kali_export
+}
+
+# Expose the container's copies of tools that are still missing on the host as /usr/local/bin commands.
+kali_export() {
+  local cmd tier methods desc path stage
+  stage="$HOME/.local/share/foxos/kali-exports"; mkdir -p "$stage"
+  while IFS='|' read -r cmd tier methods desc; do
+    have "$cmd" && continue
+    if [ "${FOXOS_DRYRUN:-0}" = 1 ]; then printf '  [dry-run] export %s from %s → %s/%s\n' "$cmd" "$BOX" "$BIN" "$cmd"; continue; fi
+    path=$(distrobox enter "$BOX" -- sh -c "command -v '$cmd'" 2>/dev/null | tail -1 | tr -d '\r')
+    [ -n "$path" ] || continue
+    distrobox enter "$BOX" -- distrobox-export --bin "$path" --export-path "$stage" >/dev/null 2>&1 || continue
+    [ -f "$stage/$cmd" ] && as_root install -m 0755 "$stage/$cmd" "$BIN/$cmd" && echo "  ✓ $cmd (from Kali container)"
+  done < <(rows)
+  say "Kali container tools are ready. Tools needing raw packet/Wi-Fi access may still need host privileges."
+}
+
+confirm() { [ "$YES" = 1 ] && return 0; [ -t 0 ] || return 1; local a; read -rp "  $1 [y/N] " a; [[ "$a" =~ ^[Yy] ]]; }
+
+# Tests source this file with FOXOS_TOOLS_NO_MAIN=1 to call the functions directly.
+[ "${FOXOS_TOOLS_NO_MAIN:-0}" = 1 ] && return 0
+
+case "${1:-check}" in
+  check) shift || true; cmd_check "$@" ;;
+  install) shift; cmd_install "$@" ;;
+  kali) shift; cmd_kali "$@" ;;
+  -h|--help|help) sed -n 2,15p "$0" ;;
+  *) echo "usage: foxos-tools check | install [--core|--all] [--yes] | kali [--set missing|headless|default] [--yes]"; exit 1 ;;
+esac
