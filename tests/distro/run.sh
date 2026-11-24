@@ -19,7 +19,7 @@ fi
 id fox >/dev/null 2>&1 || useradd -m -s /bin/bash fox
 pwconv 2>/dev/null || true   # some images (Docker Fedora) leave no shadow entry, which breaks sudo
 echo "fox:$(head -c 18 /dev/urandom | base64)" | chpasswd 2>/dev/null || true   # complete account entry for PAM
-echo "fox ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/fox; chmod 440 /etc/sudoers.d/fox
+printf "Defaults:fox !pam_acct_mgmt\nfox ALL=(ALL) NOPASSWD:ALL\n" > /etc/sudoers.d/fox; chmod 440 /etc/sudoers.d/fox   # container PAM may lack account services
 cp -r /kit /home/fox/foxos-kit; chown -R fox /home/fox/foxos-kit
 su - fox -c "cd ~/foxos-kit && FOXOS_NO_CLAUDE=1 ./install.sh --no-rice --no-timers --no-rc --toolkit none < /dev/null" ; echo "INSTALL_EXIT=$?"
 su - fox -c "bash ~/foxos-kit/tests/distro/verify.sh"'
